@@ -40,17 +40,23 @@ export function demoForecast() {
       t.setDate(t.getDate() + d);
       t.setHours(hour, 0, 0, 0);
 
-      // Tag 2 bringt ein Gewitter, Tag 5 kräftige Böen — beides löst
-      // die entsprechenden Warnungen in der UI aus.
+      // Tag 2 bringt ein Gewitter, Tag 5 Sturm — beides löst die
+      // entsprechenden Warnungen aus.
+      //
+      // Der Sturmtag ist bewusst so kräftig, dass jedes Zeitfenster auf
+      // 0 Punkte gekappt wird, und seine Flaute liegt am Nachmittag statt
+      // am Morgen. Beides zusammen prüft, dass dort das ruhigste und nicht
+      // einfach das früheste Fenster empfohlen wird.
       const isStormDay = d === 2;
       const isGustyDay = d === 5;
       const base = 9 + d * 3 + Math.sin(hour / 2) * 3;
+      const stormWind = 50 + Math.cos((hour - 8) / 2.5) * 8;
 
       records.push({
         timestamp: t.toISOString(),
-        wind_speed: isGustyDay ? base + 14 : base,
+        wind_speed: isGustyDay ? stormWind : base,
         wind_direction: 220 + d * 12,
-        wind_gust_speed: isGustyDay ? base + 48 : base + 9,
+        wind_gust_speed: isGustyDay ? stormWind + 42 : base + 9,
         temperature: 19 + d,
         condition: isStormDay && hour > 14 ? "thunderstorm" : "dry",
         precipitation: isStormDay && hour > 14 ? 3 : 0,

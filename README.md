@@ -17,7 +17,8 @@ und ein Vereinskalender mit Schreibzugriff auf einen iCloud-Kalender.
   zu liegen. Bei gleichem Score gewinnt der frühere Tag.
 - **Beste Tageszeit je Tag**: Ein gleitendes 3-Stunden-Fenster wird über die
   Segelstunden geschoben; das bestbewertete Fenster steht auf jeder Tageskarte
-  und belegt das Kalenderformular vor.
+  und belegt das Kalenderformular vor. An zu windigen Tagen wird das ruhigste
+  Fenster empfohlen und entsprechend als "Ruhigste Zeit" ausgewiesen.
 - **Warnungen** für Gewitter und starke Böen — aktuell (rot) und für die
   kommenden Tage (gelb). Schwellen orientieren sich an Beaufort: ab 39 km/h
   Böen ein Hinweis, ab 62 km/h (Sturmböen) eine Warnung.

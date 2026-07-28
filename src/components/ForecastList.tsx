@@ -119,7 +119,10 @@ export default function ForecastList({ forecast, bestDayIndex }: ForecastListPro
                   <div className="flex items-center gap-1.5 text-ink-muted">
                     <Clock className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
                     <span className="text-xs">
-                      Beste Zeit {formatWindow(day.bestWindow)}
+                      {/* An zu windigen Tagen ist das Fenster nicht "gut",
+                          sondern schlicht das ruhigste des Tages. */}
+                      {day.rating === "zu_stark" ? "Ruhigste Zeit" : "Beste Zeit"}{" "}
+                      {formatWindow(day.bestWindow)}
                     </span>
                   </div>
                 )}

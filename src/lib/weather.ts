@@ -117,9 +117,18 @@ function windScore(avgKmh: number): number {
  * Grundlage ist die Windkurve oben; Böigkeit, Niederschlag und Gewitter
  * ziehen davon ab.
  */
-function scoreDay(
-  hours: WindObservation[],
-): { score: number; rating: SailingRating } {
+function scoreDay(hours: WindObservation[]): {
+  /** Anzeigewert, auf 0..100 begrenzt und gerundet. */
+  score: number;
+  /**
+   * Ungekappter, ungerundeter Wert. Nur zum Vergleichen: An Tagen, die
+   * ohnehin unsegelbar sind, laufen alle Anzeigewerte auf 0 zusammen — der
+   * Rohwert unterscheidet dort weiter zwischen "kräftig zu viel" und
+   * "unmöglich" und lässt so das ruhigste Fenster gewinnen.
+   */
+  rawScore: number;
+  rating: SailingRating;
+} {
   const speeds = hours
     .map((h) => h.windSpeedKmh)
     .filter((v): v is number => v != null);
@@ -130,25 +139,32 @@ function scoreDay(
   const hasThunderstorm = hours.some((h) => h.condition === "thunderstorm");
 
   if (speeds.length === 0) {
-    return { score: 0, rating: "schlecht" };
+    return {
+      score: 0,
+      rawScore: Number.NEGATIVE_INFINITY,
+      rating: "schlecht",
+    };
   }
 
   const avg = speeds.reduce((a, b) => a + b, 0) / speeds.length;
   const gustMax = gusts.length ? Math.max(...gusts) : avg;
 
-  let score = windScore(avg);
+  let raw = windScore(avg);
 
   // Böigkeit: gleitender Abzug statt Stufe, damit unruhige Tage auch
   // untereinander unterscheidbar bleiben. Normale Spreizungen bis 15 km/h
   // gelten als unauffällig.
   const gustSpread = Math.max(0, gustMax - avg);
-  if (gustSpread > 15) score -= Math.min((gustSpread - 15) * 0.8, 20);
-  if (gustMax >= GUST_STORM_KMH) score -= 25;
+  if (gustSpread > 15) raw -= Math.min((gustSpread - 15) * 0.8, 20);
+  if (gustMax >= GUST_STORM_KMH) raw -= 25;
 
-  score -= Math.min(precip * 4, 30);
-  if (hasThunderstorm) score = 0;
+  raw -= Math.min(precip * 4, 30);
 
-  score = Math.max(0, Math.min(100, Math.round(score)));
+  // Gewitter ist ein Ausschlusskriterium, kein Abzug: deutlich unter jeden
+  // windbedingten Malus, damit gewitterfreie Fenster immer vorgezogen werden.
+  if (hasThunderstorm) raw = -1000;
+
+  const score = Math.max(0, Math.min(100, Math.round(raw)));
 
   let rating: SailingRating;
   if (hasThunderstorm) rating = "schlecht";
@@ -159,7 +175,7 @@ function scoreDay(
   else if (score >= 40) rating = "maessig";
   else rating = "schlecht";
 
-  return { score, rating };
+  return { score, rawScore: raw, rating };
 }
 
 /** Länge des empfohlenen Zeitfensters in Stunden. */
@@ -169,6 +185,11 @@ const WINDOW_HOURS = 3;
  * Sucht das beste zusammenhängende Zeitfenster eines Tages, indem ein
  * gleitendes Fenster über die Segelstunden geschoben und mit derselben
  * Bewertung wie der Gesamttag gescort wird.
+ *
+ * Verglichen wird über den ungekappten Rohwert. An zu windigen Tagen fallen
+ * sonst alle Fenster auf 0 und das früheste gewönne willkürlich; über den
+ * Rohwert setzt sich dort das ruhigste Fenster durch — genau das, was an
+ * einem Starkwindtag gesucht ist.
  */
 function findBestWindow(hours: WindObservation[]): BestWindow | null {
   const usable = hours
@@ -179,6 +200,8 @@ function findBestWindow(hours: WindObservation[]): BestWindow | null {
   if (usable.length < WINDOW_HOURS) return null;
 
   let best: BestWindow | null = null;
+  let bestRaw = Number.NEGATIVE_INFINITY;
+  let bestGustMax = Number.POSITIVE_INFINITY;
 
   for (let i = 0; i + WINDOW_HOURS <= usable.length; i++) {
     const slice = usable.slice(i, i + WINDOW_HOURS);
@@ -190,8 +213,7 @@ function findBestWindow(hours: WindObservation[]): BestWindow | null {
     if (!contiguous) continue;
 
     const observations = slice.map((entry) => entry.obs);
-    const { score } = scoreDay(observations);
-    if (best && score <= best.score) continue;
+    const { score, rawScore } = scoreDay(observations);
 
     const speeds = observations
       .map((o) => o.windSpeedKmh)
@@ -199,13 +221,22 @@ function findBestWindow(hours: WindObservation[]): BestWindow | null {
     const gusts = observations
       .map((o) => o.windGustKmh)
       .filter((v): v is number => v != null);
+    const gustMax = gusts.length ? Math.max(...gusts) : 0;
 
+    if (best) {
+      if (rawScore < bestRaw) continue;
+      // Bei echtem Gleichstand entscheidet die ruhigere Böenspitze.
+      if (rawScore === bestRaw && gustMax >= bestGustMax) continue;
+    }
+
+    bestRaw = rawScore;
+    bestGustMax = gustMax;
     best = {
       startHour: slice[0].hour,
       endHour: slice[slice.length - 1].hour + 1,
       windSpeedAvgKmh:
         Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
-      windGustMaxKmh: gusts.length ? Math.round(Math.max(...gusts) * 10) / 10 : 0,
+      windGustMaxKmh: Math.round(gustMax * 10) / 10,
       windDirectionDeg: Math.round(dominantDirection(observations)),
       score,
     };

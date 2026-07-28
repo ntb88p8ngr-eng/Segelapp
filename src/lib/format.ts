@@ -51,6 +51,20 @@ export function formatDateTimeLocal(dateStr: string): string {
   )}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** Lokaler Tagesschlüssel im Format YYYY-MM-DD, passend zu DailyForecast.date. */
+export function toLocalDateKey(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+export function formatTimeRange(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const time = (d: Date) =>
+    d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return `${time(start)}–${time(end)} Uhr`;
+}
+
 const RATING_LABELS: Record<string, string> = {
   top: "Top Segeltag",
   gut: "Gut",

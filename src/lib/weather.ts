@@ -1,7 +1,11 @@
 import { AMMERSEE_LOCATION } from "./locations";
+import { demoCurrentWeather, demoForecast, isDemoMode } from "./demoWeather";
+import { formatKnots, formatShortDate, formatWeekday } from "./format";
 import type {
+  BestWindow,
   DailyForecast,
   SailingRating,
+  WeatherAlert,
   WeatherResponse,
   WindObservation,
 } from "./types";
@@ -38,41 +42,8 @@ function toObservation(r: BrightSkyRecord): WindObservation {
 }
 
 async function fetchJson(url: string) {
-  if (process.env.MOCK_WEATHER_FOR_SCREENSHOT) {
-    if (url.includes("current_weather")) {
-      return {
-        weather: {
-          timestamp: new Date().toISOString(),
-          wind_speed: 18,
-          wind_direction: 250,
-          wind_gust_speed: 29,
-          temperature: 22,
-          condition: "dry",
-          precipitation: 0,
-          cloud_cover: 30,
-        },
-      };
-    }
-    const now = new Date();
-    const records = [];
-    for (let d = 0; d < 6; d++) {
-      for (let h = 8; h < 20; h++) {
-        const t = new Date(now);
-        t.setDate(t.getDate() + d);
-        t.setHours(h, 0, 0, 0);
-        records.push({
-          timestamp: t.toISOString(),
-          wind_speed: 8 + d * 4 + Math.sin(h) * 3,
-          wind_direction: 220 + d * 10,
-          wind_gust_speed: 14 + d * 5,
-          temperature: 20 + d,
-          condition: d === 2 ? "rain" : "dry",
-          precipitation: d === 2 ? 2 : 0,
-          cloud_cover: 30,
-        });
-      }
-    }
-    return { weather: records };
+  if (isDemoMode()) {
+    return url.includes("current_weather") ? demoCurrentWeather() : demoForecast();
   }
   const res = await fetch(url, { next: { revalidate: 600 } });
   if (!res.ok) {
@@ -143,6 +114,58 @@ function scoreDay(
   else rating = "schlecht";
 
   return { score, rating };
+}
+
+/** Länge des empfohlenen Zeitfensters in Stunden. */
+const WINDOW_HOURS = 3;
+
+/**
+ * Sucht das beste zusammenhängende Zeitfenster eines Tages, indem ein
+ * gleitendes Fenster über die Segelstunden geschoben und mit derselben
+ * Bewertung wie der Gesamttag gescort wird.
+ */
+function findBestWindow(hours: WindObservation[]): BestWindow | null {
+  const usable = hours
+    .map((h) => ({ obs: h, hour: new Date(h.timestamp).getHours() }))
+    .filter((entry) => entry.obs.windSpeedKmh != null)
+    .sort((a, b) => a.hour - b.hour);
+
+  if (usable.length < WINDOW_HOURS) return null;
+
+  let best: BestWindow | null = null;
+
+  for (let i = 0; i + WINDOW_HOURS <= usable.length; i++) {
+    const slice = usable.slice(i, i + WINDOW_HOURS);
+
+    // Nur echte Blöcke aufeinanderfolgender Stunden bewerten.
+    const contiguous = slice.every(
+      (entry, idx) => idx === 0 || entry.hour === slice[idx - 1].hour + 1,
+    );
+    if (!contiguous) continue;
+
+    const observations = slice.map((entry) => entry.obs);
+    const { score } = scoreDay(observations);
+    if (best && score <= best.score) continue;
+
+    const speeds = observations
+      .map((o) => o.windSpeedKmh)
+      .filter((v): v is number => v != null);
+    const gusts = observations
+      .map((o) => o.windGustKmh)
+      .filter((v): v is number => v != null);
+
+    best = {
+      startHour: slice[0].hour,
+      endHour: slice[slice.length - 1].hour + 1,
+      windSpeedAvgKmh:
+        Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
+      windGustMaxKmh: gusts.length ? Math.round(Math.max(...gusts) * 10) / 10 : 0,
+      windDirectionDeg: Math.round(dominantDirection(observations)),
+      score,
+    };
+  }
+
+  return best;
 }
 
 function dominantDirection(hours: WindObservation[]): number {
@@ -217,12 +240,83 @@ export async function fetchForecast(days = 6): Promise<DailyForecast[]> {
         relevantHours.find((h) => h.condition)?.condition ?? hours[0]?.condition ?? null,
       score,
       rating,
+      bestWindow: findBestWindow(relevantHours),
       hourly: hours,
     });
   }
 
   result.sort((a, b) => a.date.localeCompare(b.date));
   return result;
+}
+
+// Böen-Schwellen nach Beaufort (km/h): ab Bft 6 wird es für kleinere Boote
+// unangenehm, ab Bft 8 (Sturmböen) sollte nicht mehr ausgelaufen werden.
+const GUST_STRONG_KMH = 39;
+const GUST_STORM_KMH = 62;
+
+function buildAlerts(
+  current: WindObservation | null,
+  forecast: DailyForecast[],
+): WeatherAlert[] {
+  const alerts: WeatherAlert[] = [];
+
+  if (current?.condition === "thunderstorm") {
+    alerts.push({
+      id: "gewitter-aktuell",
+      kind: "gewitter",
+      severity: "warnung",
+      title: "Gewitter am See",
+      description:
+        "Aktuell Gewitter gemeldet. Nicht auslaufen — Blitzschlag und plötzliche Fallböen sind lebensgefährlich.",
+    });
+  }
+
+  const currentGust = current?.windGustKmh ?? null;
+  if (currentGust != null && currentGust >= GUST_STORM_KMH) {
+    alerts.push({
+      id: "boeen-aktuell-sturm",
+      kind: "boeen",
+      severity: "warnung",
+      title: "Sturmböen",
+      description: `Böen bis ${formatKnots(currentGust)} (${Math.round(currentGust)} km/h). Auslaufen wird dringend abgeraten.`,
+    });
+  } else if (currentGust != null && currentGust >= GUST_STRONG_KMH) {
+    alerts.push({
+      id: "boeen-aktuell-stark",
+      kind: "boeen",
+      severity: "hinweis",
+      title: "Starke Böen",
+      description: `Böen bis ${formatKnots(currentGust)} (${Math.round(currentGust)} km/h). Nur für erfahrene Crews, Reff empfohlen.`,
+    });
+  }
+
+  // Kommende Tage: nur der jeweils erste betroffene Tag je Kategorie,
+  // damit die Warnleiste nicht überläuft.
+  const stormDay = forecast.find((day) =>
+    day.hourly.some((h) => h.condition === "thunderstorm"),
+  );
+  if (stormDay && current?.condition !== "thunderstorm") {
+    alerts.push({
+      id: `gewitter-${stormDay.date}`,
+      kind: "gewitter",
+      severity: "hinweis",
+      title: `Gewitter am ${formatWeekday(stormDay.date)}`,
+      description: `Für ${formatWeekday(stormDay.date)}, ${formatShortDate(stormDay.date)} sind Gewitter vorhergesagt. Törnplanung anpassen.`,
+    });
+  }
+
+  const gustyDay = forecast.find((day) => day.windGustMaxKmh >= GUST_STORM_KMH);
+  if (gustyDay && (currentGust == null || currentGust < GUST_STORM_KMH)) {
+    alerts.push({
+      id: `boeen-${gustyDay.date}`,
+      kind: "boeen",
+      severity: "hinweis",
+      title: `Sturmböen am ${formatWeekday(gustyDay.date)}`,
+      description: `Böen bis ${formatKnots(gustyDay.windGustMaxKmh)} erwartet (${formatShortDate(gustyDay.date)}).`,
+    });
+  }
+
+  return alerts;
 }
 
 export async function getWeatherOverview(): Promise<WeatherResponse> {
@@ -246,6 +340,7 @@ export async function getWeatherOverview(): Promise<WeatherResponse> {
     current,
     forecast,
     bestDayIndex,
+    alerts: buildAlerts(current, forecast),
     fetchedAt: new Date().toISOString(),
   };
 }

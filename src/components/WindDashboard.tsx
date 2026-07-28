@@ -11,7 +11,7 @@ interface WindDashboardProps {
 export default function WindDashboard({ current, locationName }: WindDashboardProps) {
   if (!current) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-slate-300">
+      <div className="rounded-2xl border border-line bg-surface p-8 text-center text-ink-muted">
         Aktuelle Winddaten konnten nicht geladen werden.
       </div>
     );
@@ -23,16 +23,16 @@ export default function WindDashboard({ current, locationName }: WindDashboardPr
       : null;
 
   return (
-    <div className="grid grid-cols-1 gap-6 rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 to-slate-800/60 p-6 shadow-xl backdrop-blur sm:grid-cols-[auto_1fr] sm:p-8">
+    <div className="grid grid-cols-1 gap-6 rounded-2xl border border-line bg-surface p-6 shadow-xl backdrop-blur sm:grid-cols-[auto_1fr] sm:p-8">
       <div className="flex justify-center pb-8 sm:pb-0 sm:pr-8">
         <CompassRose directionDeg={current.windDirectionDeg ?? 0} />
       </div>
       <div className="flex flex-col justify-center gap-4">
         <div>
-          <p className="text-xs uppercase tracking-widest text-sky-300/80">
+          <p className="text-xs uppercase tracking-widest text-accent">
             Aktuell am {locationName}
           </p>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-ink-muted">
             {new Date(current.timestamp).toLocaleString("de-DE", {
               weekday: "short",
               hour: "2-digit",
@@ -114,16 +114,16 @@ function Stat({
     <div
       className={`rounded-xl border p-3 ${
         highlight
-          ? "border-amber-400/40 bg-amber-400/10"
-          : "border-white/10 bg-white/5"
+          ? "border-amber-500/50 bg-amber-500/15"
+          : "border-line bg-surface-inset"
       }`}
     >
-      <div className="flex items-center gap-1.5 text-slate-400">
+      <div className="flex items-center gap-1.5 text-ink-muted">
         {icon}
         <span className="text-xs uppercase tracking-wide">{label}</span>
       </div>
-      <p className="mt-1 text-xl font-semibold text-slate-50">{value}</p>
-      {sub && <p className="text-xs text-slate-400">{sub}</p>}
+      <p className="mt-1 text-xl font-semibold text-ink">{value}</p>
+      {sub && <p className="text-xs text-ink-muted">{sub}</p>}
     </div>
   );
 }

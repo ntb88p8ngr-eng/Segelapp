@@ -17,6 +17,17 @@ export type SailingRating =
   | "zu_stark"
   | "schlecht";
 
+/** Das windmäßig beste zusammenhängende Zeitfenster eines Tages. */
+export interface BestWindow {
+  /** Lokale Stunden, Ende exklusiv: 13/16 bedeutet 13–16 Uhr. */
+  startHour: number;
+  endHour: number;
+  windSpeedAvgKmh: number;
+  windGustMaxKmh: number;
+  windDirectionDeg: number;
+  score: number;
+}
+
 export interface DailyForecast {
   date: string;
   windSpeedAvgKmh: number;
@@ -28,7 +39,20 @@ export interface DailyForecast {
   condition: string | null;
   score: number;
   rating: SailingRating;
+  bestWindow: BestWindow | null;
   hourly: WindObservation[];
+}
+
+export type AlertSeverity = "warnung" | "hinweis";
+
+export type AlertKind = "gewitter" | "boeen";
+
+export interface WeatherAlert {
+  id: string;
+  kind: AlertKind;
+  severity: AlertSeverity;
+  title: string;
+  description: string;
 }
 
 export interface WeatherResponse {
@@ -41,16 +65,8 @@ export interface WeatherResponse {
   current: WindObservation | null;
   forecast: DailyForecast[];
   bestDayIndex: number | null;
+  alerts: WeatherAlert[];
   fetchedAt: string;
-}
-
-export interface SailingClub {
-  id: string;
-  name: string;
-  lat: number;
-  lon: number;
-  description: string;
-  website?: string;
 }
 
 export interface ClubCalendarEvent {

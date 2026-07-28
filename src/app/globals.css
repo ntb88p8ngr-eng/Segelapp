@@ -1,20 +1,65 @@
 @import "tailwindcss";
 
-:root {
-  --background: #0b1220;
-  --foreground: #e2e8f0;
+/* Theme-Umschaltung über data-theme am <html>-Element statt über die
+   System-Einstellung, damit der Toggle die Kontrolle behält. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Light: heller Seetag. */
+:root,
+:root[data-theme="light"] {
+  --page-gradient: radial-gradient(circle at top, #e0f2fe 0%, #f1f5f9 55%, #e2e8f0 100%);
+  --surface: rgba(255, 255, 255, 0.75);
+  --surface-strong: rgba(255, 255, 255, 0.92);
+  --surface-inset: rgba(15, 23, 42, 0.04);
+  --line: rgba(15, 23, 42, 0.12);
+  --ink: #0f172a;
+  --ink-muted: #475569;
+  --ink-soft: #64748b;
+  --accent: #0284c7;
+  --wind-streak: 8, 47, 73;
+  --map-tint: 0.06;
+}
+
+/* Dark: Dämmerung auf dem Wasser. */
+:root[data-theme="dark"] {
+  --page-gradient: radial-gradient(circle at top, #0f2942 0%, #0b1220 55%, #060a12 100%);
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-strong: rgba(15, 23, 42, 0.7);
+  --surface-inset: rgba(0, 0, 0, 0.25);
+  --line: rgba(255, 255, 255, 0.1);
+  --ink: #f1f5f9;
+  --ink-muted: #94a3b8;
+  --ink-soft: #64748b;
+  --accent: #38bdf8;
+  --wind-streak: 186, 230, 253;
+  --map-tint: 0.35;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-surface-inset: var(--surface-inset);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-soft: var(--ink-soft);
+  --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 body {
-  background: radial-gradient(circle at top, #0f2942 0%, #0b1220 55%, #060a12 100%);
-  color: var(--foreground);
+  background: var(--page-gradient);
+  background-attachment: fixed;
+  color: var(--ink);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   min-height: 100vh;
 }
@@ -22,30 +67,52 @@ body {
 .input {
   width: 100%;
   border-radius: 0.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  background: var(--surface-strong);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
-  color: #e2e8f0;
+  color: var(--ink);
   outline: none;
 }
 
 .input:focus {
-  border-color: rgba(56, 189, 248, 0.6);
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .leaflet-container {
-  background: #0b1220 !important;
+  background: var(--surface-inset) !important;
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Im Dark Mode werden die Kartenkacheln abgedunkelt, damit die helle
+   OSM-Grafik nicht aus dem dunklen Layout herausbricht. */
+html[data-theme="dark"] .leaflet-tile-pane {
+  filter: brightness(0.62) saturate(0.75) contrast(1.05);
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--surface-strong);
+  color: var(--ink);
 }
 
 .leaflet-popup-content-wrapper a {
-  color: #38bdf8;
+  color: var(--accent);
+}
+
+/* Leaflet-Bedienelemente an das jeweilige Theme angleichen. */
+html[data-theme="dark"] .leaflet-control-zoom a {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+html[data-theme="dark"] .leaflet-control-attribution {
+  background: rgba(15, 23, 42, 0.8);
+  color: #94a3b8;
+}
+
+html[data-theme="dark"] .leaflet-control-attribution a {
+  color: #7dd3fc;
 }

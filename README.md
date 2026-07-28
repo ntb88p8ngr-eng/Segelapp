@@ -11,8 +11,10 @@ und ein Vereinskalender mit Schreibzugriff auf einen iCloud-Kalender.
   API](https://brightsky.dev) (kein API-Key nötig) — Windgeschwindigkeit,
   Windrichtung, **Windböen**, Temperatur, Niederschlag.
 - **Segeltag-Empfehlung**: Für die nächsten 6 Tage wird ein Score aus
-  mittlerer Windstärke, Böigkeit und Niederschlag berechnet (Sweet Spot ca.
-  6–15 kn), der beste Tag wird hervorgehoben.
+  mittlerer Windstärke, Böigkeit und Niederschlag berechnet. Die Windkurve
+  hat einen einzelnen Hochpunkt bei rund 11 kn und fällt zu beiden Seiten ab,
+  damit Tage im guten Band nach Qualität sortierbar bleiben statt gleichauf
+  zu liegen. Bei gleichem Score gewinnt der frühere Tag.
 - **Beste Tageszeit je Tag**: Ein gleitendes 3-Stunden-Fenster wird über die
   Segelstunden geschoben; das bestbewertete Fenster steht auf jeder Tageskarte
   und belegt das Kalenderformular vor.

@@ -63,11 +63,59 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Böen-Schwellen nach Beaufort (km/h): ab Bft 6 wird es für kleinere Boote
+// unangenehm, ab Bft 8 (Sturmböen) sollte nicht mehr ausgelaufen werden.
+// Dieselben Schwellen speisen Bewertung und Warnhinweise.
+const GUST_STRONG_KMH = 39;
+const GUST_STORM_KMH = 62;
+
 /**
- * Sailing suitability score (0-100) for a set of hourly wind observations
- * covering the "sailing window" of a day. Peaks around 12-28 km/h
- * (~6.5-15 kn) mean wind, penalizes flat calm, gusty/stormy conditions,
- * heavy rain and thunderstorms.
+ * Bewertungskurve für die mittlere Windgeschwindigkeit: km/h -> 0..100.
+ *
+ * Bewusst mit einem einzelnen Hochpunkt bei rund 20 km/h (etwa 11 kn) statt
+ * mit einem breiten Plateau. Ein Plateau würde jeden Tag im "guten" Band
+ * gleich bewerten — ein Tag mit 12 km/h käme dann auf denselben Score wie
+ * einer mit 20 km/h, und bei Gleichstand gewinnt einfach der frühere Tag.
+ */
+const WIND_SCORE_CURVE: ReadonlyArray<readonly [number, number]> = [
+  [0, 0],
+  [4, 8],
+  [7, 25],
+  [9, 40],
+  [12, 62],
+  [15, 80],
+  [17, 91],
+  [20, 100],
+  [24, 94],
+  [28, 84],
+  [32, 72],
+  [38, 52],
+  [45, 28],
+  [55, 8],
+  [70, 0],
+];
+
+/** Lineare Interpolation zwischen den Stützstellen der Kurve. */
+function windScore(avgKmh: number): number {
+  const first = WIND_SCORE_CURVE[0];
+  const last = WIND_SCORE_CURVE[WIND_SCORE_CURVE.length - 1];
+  if (avgKmh <= first[0]) return first[1];
+  if (avgKmh >= last[0]) return last[1];
+
+  for (let i = 1; i < WIND_SCORE_CURVE.length; i++) {
+    const [x1, y1] = WIND_SCORE_CURVE[i];
+    if (avgKmh <= x1) {
+      const [x0, y0] = WIND_SCORE_CURVE[i - 1];
+      return y0 + ((avgKmh - x0) / (x1 - x0)) * (y1 - y0);
+    }
+  }
+  return last[1];
+}
+
+/**
+ * Segeltauglichkeit (0-100) für eine Reihe stündlicher Beobachtungen.
+ * Grundlage ist die Windkurve oben; Böigkeit, Niederschlag und Gewitter
+ * ziehen davon ab.
  */
 function scoreDay(
   hours: WindObservation[],
@@ -88,17 +136,15 @@ function scoreDay(
   const avg = speeds.reduce((a, b) => a + b, 0) / speeds.length;
   const gustMax = gusts.length ? Math.max(...gusts) : avg;
 
-  let score: number;
-  if (avg < 5) score = 10;
-  else if (avg < 9) score = 10 + ((avg - 5) / 4) * 50;
-  else if (avg < 12) score = 60 + ((avg - 9) / 3) * 30;
-  else if (avg <= 28) score = 100;
-  else if (avg <= 38) score = 100 - ((avg - 28) / 10) * 40;
-  else if (avg <= 50) score = 60 - ((avg - 38) / 12) * 40;
-  else score = 5;
+  let score = windScore(avg);
 
-  if (gustMax - avg > 25) score -= 10;
-  if (gustMax > 60) score -= 20;
+  // Böigkeit: gleitender Abzug statt Stufe, damit unruhige Tage auch
+  // untereinander unterscheidbar bleiben. Normale Spreizungen bis 15 km/h
+  // gelten als unauffällig.
+  const gustSpread = Math.max(0, gustMax - avg);
+  if (gustSpread > 15) score -= Math.min((gustSpread - 15) * 0.8, 20);
+  if (gustMax >= GUST_STORM_KMH) score -= 25;
+
   score -= Math.min(precip * 4, 30);
   if (hasThunderstorm) score = 0;
 
@@ -249,11 +295,6 @@ export async function fetchForecast(days = 6): Promise<DailyForecast[]> {
   return result;
 }
 
-// Böen-Schwellen nach Beaufort (km/h): ab Bft 6 wird es für kleinere Boote
-// unangenehm, ab Bft 8 (Sturmböen) sollte nicht mehr ausgelaufen werden.
-const GUST_STRONG_KMH = 39;
-const GUST_STORM_KMH = 62;
-
 function buildAlerts(
   current: WindObservation | null,
   forecast: DailyForecast[],
@@ -329,6 +370,8 @@ export async function getWeatherOverview(): Promise<WeatherResponse> {
   if (forecast.length) {
     let bestIdx = 0;
     for (let i = 1; i < forecast.length; i++) {
+      // Strikt größer: Bei gleichem Score bleibt der frühere Tag vorn — ein
+      // gleich guter Termin näher an heute ist für die Planung mehr wert.
       if (forecast[i].score > forecast[bestIdx].score) bestIdx = i;
     }
     if (forecast[bestIdx].score > 0) bestDayIndex = bestIdx;

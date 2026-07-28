@@ -5,6 +5,7 @@ import type {
   BestWindow,
   DailyForecast,
   SailingRating,
+  SevereWeatherRisk,
   WeatherAlert,
   WeatherResponse,
   WindObservation,
@@ -178,6 +179,26 @@ function scoreDay(hours: WindObservation[]): {
   return { score, rawScore: raw, rating };
 }
 
+/**
+ * Prüft den ganzen Tag (nicht nur das Segelfenster) auf Unwetterlagen.
+ * Gewitter und Sturmböen sind für die Planung auch dann relevant, wenn sie
+ * ausserhalb der üblichen Segelstunden auftreten.
+ */
+function buildSevereRisk(
+  hours: WindObservation[],
+  dayGustMaxKmh: number,
+): SevereWeatherRisk | null {
+  const hasThunderstorm = hours.some((h) => h.condition === "thunderstorm");
+  const hasStormGusts = dayGustMaxKmh >= GUST_STORM_KMH;
+  if (!hasThunderstorm && !hasStormGusts) return null;
+
+  const parts: string[] = [];
+  if (hasThunderstorm) parts.push("Gewitter");
+  if (hasStormGusts) parts.push(`Sturmböen bis ${formatKnots(dayGustMaxKmh)}`);
+
+  return { hasThunderstorm, hasStormGusts, reason: parts.join(" · ") };
+}
+
 /** Länge des empfohlenen Zeitfensters in Stunden. */
 const WINDOW_HOURS = 3;
 
@@ -298,6 +319,13 @@ export async function fetchForecast(days = 6): Promise<DailyForecast[]> {
     const precipSum = hours.reduce((s, h) => s + (h.precipitationMm ?? 0), 0);
     const { score, rating } = scoreDay(relevantHours);
 
+    // Für die Gefahreneinschätzung zählt der gesamte Tag, nicht nur das
+    // Segelfenster.
+    const allGusts = hours
+      .map((h) => h.windGustKmh)
+      .filter((v): v is number => v != null);
+    const dayGustMax = allGusts.length ? Math.max(...allGusts) : 0;
+
     if (!speeds.length) continue;
     if (new Date(day) < new Date(now.toISOString().slice(0, 10))) continue;
 
@@ -318,6 +346,7 @@ export async function fetchForecast(days = 6): Promise<DailyForecast[]> {
       score,
       rating,
       bestWindow: findBestWindow(relevantHours),
+      severeRisk: buildSevereRisk(hours, dayGustMax),
       hourly: hours,
     });
   }

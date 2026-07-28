@@ -22,6 +22,10 @@ und ein Vereinskalender mit Schreibzugriff auf einen iCloud-Kalender.
 - **Warnungen** für Gewitter und starke Böen — aktuell (rot) und für die
   kommenden Tage (gelb). Schwellen orientieren sich an Beaufort: ab 39 km/h
   Böen ein Hinweis, ab 62 km/h (Sturmböen) eine Warnung.
+- **Unwettergefahr pro Tag**: Tage mit Gewitter oder Sturmböen werden in der
+  Vorhersage grundsätzlich rot markiert und tragen einen Hinweis mit dem
+  Grund. Geprüft wird der gesamte Tag, nicht nur die Segelstunden. Alle
+  übrigen Angaben des Tages bleiben sichtbar.
 - **Animierte Windkarte** (Leaflet/OpenStreetMap): eine Partikelströmung im
   Stil der iOS-Wetter-App zeigt die Windrichtung über dem See; Geschwindigkeit
   und Strichlänge folgen Wind und Böen.

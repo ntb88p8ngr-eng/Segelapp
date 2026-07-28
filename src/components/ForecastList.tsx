@@ -7,8 +7,13 @@ import {
   formatWeekday,
   ratingLabel,
 } from "@/lib/format";
-import type { BestWindow, ClubCalendarEvent, DailyForecast } from "@/lib/types";
-import { Star, Wind, Gauge, Clock, CalendarX } from "lucide-react";
+import type {
+  BestWindow,
+  ClubCalendarEvent,
+  DailyForecast,
+  SevereWeatherRisk,
+} from "@/lib/types";
+import { Star, Wind, Gauge, Clock, CalendarX, TriangleAlert } from "lucide-react";
 import clsx from "clsx";
 import { useCalendar } from "./CalendarProvider";
 
@@ -75,17 +80,27 @@ export default function ForecastList({ forecast, bestDayIndex }: ForecastListPro
         {forecast.map((day, idx) => {
           const dayEvents = eventsByDate.get(day.date) ?? [];
           const isBooked = configured && dayEvents.length > 0;
+          const severe = day.severeRisk;
 
           return (
             <div
               key={day.date}
               className={clsx(
                 "relative rounded-xl border p-4 transition hover:scale-[1.02]",
-                isBooked
-                  ? "border-rose-500/60 bg-rose-500/15"
-                  : (RATING_STYLES[day.rating] ?? "border-line bg-surface"),
-                idx === bestDayIndex && !isBooked && "ring-2 ring-emerald-400/70",
-                idx === bestDayIndex && isBooked && "ring-2 ring-rose-400/60",
+                // Unwettergefahr schlägt jede andere Einfärbung — auch eine
+                // Belegung oder eine an sich gute Windbewertung.
+                severe
+                  ? "border-rose-600/70 bg-rose-600/20"
+                  : isBooked
+                    ? "border-rose-500/60 bg-rose-500/15"
+                    : (RATING_STYLES[day.rating] ?? "border-line bg-surface"),
+                idx === bestDayIndex &&
+                  !isBooked &&
+                  !severe &&
+                  "ring-2 ring-emerald-400/70",
+                idx === bestDayIndex &&
+                  (isBooked || severe) &&
+                  "ring-2 ring-rose-400/60",
               )}
             >
               {idx === bestDayIndex && (
@@ -98,6 +113,8 @@ export default function ForecastList({ forecast, bestDayIndex }: ForecastListPro
                 {formatWeekday(day.date)}
               </p>
               <p className="text-xs text-ink-muted">{formatShortDate(day.date)}</p>
+
+              {severe && <SevereBadge risk={severe} />}
 
               <div className="mt-3 space-y-1.5">
                 <div className="flex items-center gap-1.5 text-ink">
@@ -119,9 +136,12 @@ export default function ForecastList({ forecast, bestDayIndex }: ForecastListPro
                   <div className="flex items-center gap-1.5 text-ink-muted">
                     <Clock className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
                     <span className="text-xs">
-                      {/* An zu windigen Tagen ist das Fenster nicht "gut",
-                          sondern schlicht das ruhigste des Tages. */}
-                      {day.rating === "zu_stark" ? "Ruhigste Zeit" : "Beste Zeit"}{" "}
+                      {/* An gefährlichen oder zu windigen Tagen ist das
+                          Fenster nicht "gut", sondern das am wenigsten
+                          ungünstige des Tages. */}
+                      {day.rating === "zu_stark" || severe
+                        ? "Ruhigste Zeit"
+                        : "Beste Zeit"}{" "}
                       {formatWindow(day.bestWindow)}
                     </span>
                   </div>
@@ -141,6 +161,25 @@ export default function ForecastList({ forecast, bestDayIndex }: ForecastListPro
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function SevereBadge({ risk }: { risk: SevereWeatherRisk }) {
+  return (
+    <div
+      role="alert"
+      className="mt-3 flex items-start gap-1.5 rounded-lg border border-rose-600/60 bg-rose-600/25 px-2 py-1.5"
+    >
+      <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-700 dark:text-rose-300" />
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold text-rose-900 dark:text-rose-100">
+          Unwettergefahr
+        </p>
+        <p className="text-[11px] text-rose-800 dark:text-rose-200/90">
+          {risk.reason}
+        </p>
       </div>
     </div>
   );

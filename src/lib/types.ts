@@ -17,6 +17,17 @@ export type SailingRating =
   | "zu_stark"
   | "schlecht";
 
+/**
+ * Unwettergefahr eines Tages. Bewusst unabhängig vom Segel-Score: Ein Tag
+ * kann windmäßig brauchbar sein und trotzdem eine Gewitterlage haben.
+ */
+export interface SevereWeatherRisk {
+  hasThunderstorm: boolean;
+  hasStormGusts: boolean;
+  /** Kurzbegründung für die Anzeige, z. B. "Gewitter · Sturmböen bis 54 kn". */
+  reason: string;
+}
+
 /** Das windmäßig beste zusammenhängende Zeitfenster eines Tages. */
 export interface BestWindow {
   /** Lokale Stunden, Ende exklusiv: 13/16 bedeutet 13–16 Uhr. */
@@ -40,6 +51,7 @@ export interface DailyForecast {
   score: number;
   rating: SailingRating;
   bestWindow: BestWindow | null;
+  severeRisk: SevereWeatherRisk | null;
   hourly: WindObservation[];
 }
 

@@ -127,6 +127,12 @@ tsdav (CalDAV) · ical.js / ical-generator
 
 ## Deployment
 
-Für Vercel: Projekt importieren, die iCloud-Umgebungsvariablen im
-Vercel-Dashboard setzen, fertig. Bright Sky/DWD und OpenStreetMap benötigen
-keine Keys.
+Ausführlich in **[DEPLOY.md](DEPLOY.md)**: Vercel, eigener Server mit systemd
+und Reverse Proxy, Docker — samt Einrichtung des iCloud-Zugangs, Fehlersuche
+und Hinweisen zum Betrieb.
+
+Kurzfassung: Die Seite braucht Node 20.9+ und einen laufenden Node-Prozess
+(wegen der API-Routen ist rein statisches Hosting nicht möglich). Wetterdaten
+und Karte benötigen keine Schlüssel; einzig der Kalender braucht eine Apple-ID
+mit app-spezifischem Passwort. Ohne diese startet die Seite trotzdem — nur der
+Kalenderbereich bleibt dann deaktiviert.

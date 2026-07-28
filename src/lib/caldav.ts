@@ -1,7 +1,7 @@
 import { DAVClient, type DAVCalendar } from "tsdav";
-import ICAL from "ical.js";
 import ical from "ical-generator";
 import { v4 as uuidv4 } from "uuid";
+import { parseIcsEvents } from "./ics";
 import type { ClubCalendarEvent, CreateEventInput } from "./types";
 
 const ICLOUD_SERVER_URL = "https://caldav.icloud.com";
@@ -49,27 +49,6 @@ async function getTargetCalendar(client: DAVClient): Promise<DAVCalendar> {
   return calendar;
 }
 
-function parseEvent(icsData: string, url: string): ClubCalendarEvent | null {
-  try {
-    const jcalData = ICAL.parse(icsData);
-    const comp = new ICAL.Component(jcalData);
-    const vevent = comp.getFirstSubcomponent("vevent");
-    if (!vevent) return null;
-    const event = new ICAL.Event(vevent);
-    return {
-      uid: event.uid || url,
-      summary: event.summary || "Ohne Titel",
-      description: event.description || undefined,
-      location: event.location || undefined,
-      start: event.startDate.toJSDate().toISOString(),
-      end: event.endDate.toJSDate().toISOString(),
-    };
-  } catch (error) {
-    console.error("ICS Event konnte nicht geparst werden:", error);
-    return null;
-  }
-}
-
 export async function listUpcomingEvents(
   windowDays = 60,
 ): Promise<ClubCalendarEvent[]> {
@@ -88,11 +67,14 @@ export async function listUpcomingEvents(
     },
   });
 
-  const events = objects
-    .map((obj) => (obj.data ? parseEvent(obj.data, obj.url) : null))
-    .filter((e): e is ClubCalendarEvent => e !== null)
-    .sort((a, b) => a.start.localeCompare(b.start));
+  // Der Server liefert die Serie als Ganzes, nicht die Einzeltermine —
+  // aufgelöst wird sie hier, sonst erschiene ein wöchentliches Training nur
+  // ein einziges Mal.
+  const events = objects.flatMap((obj) =>
+    obj.data ? parseIcsEvents(obj.data, now, end) : [],
+  );
 
+  events.sort((a, b) => a.start.localeCompare(b.start));
   return events;
 }
 

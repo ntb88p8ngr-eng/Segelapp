@@ -90,8 +90,14 @@ export interface ClubCalendarEvent {
   end: string;
 }
 
+/** "caldav" = voller Zugriff, "public" = öffentlicher Feed (nur lesen). */
+export type CalendarSource = "caldav" | "public" | "none";
+
 export interface CalendarApiResponse {
   configured: boolean;
+  /** Nur mit CalDAV-Zugangsdaten lassen sich Termine anlegen. */
+  canWrite: boolean;
+  source: CalendarSource;
   events: ClubCalendarEvent[];
   message?: string;
 }

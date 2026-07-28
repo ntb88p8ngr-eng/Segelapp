@@ -1,31 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClubEvent, isCalDavConfigured, listUpcomingEvents } from "@/lib/caldav";
+import { createClubEvent } from "@/lib/caldav";
+import {
+  NOT_CONFIGURED_MESSAGE,
+  READ_ONLY_MESSAGE,
+  calendarSource,
+  listEvents,
+} from "@/lib/calendar";
 import type { CalendarApiResponse, CreateEventInput } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!isCalDavConfigured()) {
-    const response: CalendarApiResponse = {
+  const source = calendarSource();
+
+  if (source === "none") {
+    return NextResponse.json({
       configured: false,
+      canWrite: false,
+      source,
       events: [],
-      message:
-        "iCloud-Kalender ist noch nicht verbunden. Bitte ICLOUD_USERNAME und ICLOUD_APP_PASSWORD als Umgebungsvariablen setzen.",
-    };
-    return NextResponse.json(response);
+      message: NOT_CONFIGURED_MESSAGE,
+    } satisfies CalendarApiResponse);
   }
 
   try {
-    const events = await listUpcomingEvents();
-    const response: CalendarApiResponse = { configured: true, events };
-    return NextResponse.json(response);
+    const events = await listEvents();
+    return NextResponse.json({
+      configured: true,
+      canWrite: source === "caldav",
+      source,
+      events,
+    } satisfies CalendarApiResponse);
   } catch (error) {
-    console.error("iCloud-Kalender konnte nicht geladen werden:", error);
+    console.error("Kalender konnte nicht geladen werden:", error);
     return NextResponse.json(
       {
         configured: true,
+        canWrite: source === "caldav",
+        source,
         events: [],
-        message: "Kalender-Termine konnten nicht geladen werden.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Kalender-Termine konnten nicht geladen werden.",
       } satisfies CalendarApiResponse,
       { status: 502 },
     );
@@ -33,14 +50,16 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!isCalDavConfigured()) {
+  const source = calendarSource();
+
+  // Ein öffentlicher Feed ist eine ausgelieferte Datei — er nimmt keine
+  // Termine entgegen. Das wird getrennt vom "gar nicht eingerichtet"-Fall
+  // gemeldet, damit klar ist, woran es liegt.
+  if (source !== "caldav") {
     return NextResponse.json(
       {
-        configured: false,
-        events: [],
-        message:
-          "iCloud-Kalender ist noch nicht verbunden. Bitte ICLOUD_USERNAME und ICLOUD_APP_PASSWORD als Umgebungsvariablen setzen.",
-      } satisfies CalendarApiResponse,
+        error: source === "public" ? READ_ONLY_MESSAGE : NOT_CONFIGURED_MESSAGE,
+      },
       { status: 501 },
     );
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarPlus, CalendarClock, AlertCircle, Loader2 } from "lucide-react";
+import { CalendarPlus, CalendarClock, AlertCircle, Loader2, Eye } from "lucide-react";
 import type { ClubCalendarEvent, DailyForecast } from "@/lib/types";
 import { formatDateTimeLocal, formatTimeRange } from "@/lib/format";
 import { useCalendar } from "./CalendarProvider";
@@ -23,7 +23,7 @@ function defaultTimes(bestDay: DailyForecast | null) {
 }
 
 export default function CalendarSection({ bestDay }: CalendarSectionProps) {
-  const { configured, loading, events, message, reload } = useCalendar();
+  const { configured, canWrite, loading, events, message, reload } = useCalendar();
 
   const [formOpen, setFormOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -86,7 +86,7 @@ export default function CalendarSection({ bestDay }: CalendarSectionProps) {
           <CalendarClock className="h-5 w-5 text-accent" />
           Vereinskalender
         </h2>
-        {configured && (
+        {configured && canWrite && (
           <button
             onClick={() => (formOpen ? setFormOpen(false) : openForm())}
             className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white transition hover:opacity-90 touch:min-h-11"
@@ -94,6 +94,12 @@ export default function CalendarSection({ bestDay }: CalendarSectionProps) {
             <CalendarPlus className="h-4 w-4" />
             Termin vorschlagen
           </button>
+        )}
+        {configured && !canWrite && (
+          <span className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-ink-muted">
+            <Eye className="h-3.5 w-3.5" />
+            Öffentlicher Kalender · nur Ansicht
+          </span>
         )}
       </div>
 
@@ -107,12 +113,24 @@ export default function CalendarSection({ bestDay }: CalendarSectionProps) {
       {!loading && !configured && (
         <div className="mt-6 flex gap-3 rounded-xl border border-amber-500/50 bg-amber-500/15 p-4 text-sm text-amber-900 dark:text-amber-50">
           <AlertCircle className="h-5 w-5 shrink-0" />
-          <div>
-            <p>{message}</p>
-            <p className="mt-2 text-amber-800 dark:text-amber-200/80">
-              Setze <code className="rounded bg-surface-inset px-1">ICLOUD_USERNAME</code> und{" "}
-              <code className="rounded bg-surface-inset px-1">ICLOUD_APP_PASSWORD</code> (App-spezifisches
-              Passwort von{" "}
+          <div className="space-y-2 text-amber-800 dark:text-amber-200/80">
+            <p className="text-amber-900 dark:text-amber-50">
+              Der Vereinskalender ist noch nicht verbunden. Es gibt zwei Wege:
+            </p>
+            <p>
+              <strong>Nur anzeigen:</strong> In iCloud den Kalender öffentlich
+              freigeben und die Adresse als{" "}
+              <code className="rounded bg-surface-inset px-1">
+                ICLOUD_PUBLIC_CALENDAR_URL
+              </code>{" "}
+              hinterlegen. Schnell eingerichtet, aber Termine lassen sich dann
+              nicht über die Seite anlegen.
+            </p>
+            <p>
+              <strong>Mit Schreibrechten:</strong>{" "}
+              <code className="rounded bg-surface-inset px-1">ICLOUD_USERNAME</code> und{" "}
+              <code className="rounded bg-surface-inset px-1">ICLOUD_APP_PASSWORD</code>{" "}
+              setzen (app-spezifisches Passwort von{" "}
               <a
                 href="https://appleid.apple.com"
                 target="_blank"
@@ -121,7 +139,7 @@ export default function CalendarSection({ bestDay }: CalendarSectionProps) {
               >
                 appleid.apple.com
               </a>
-              ) als Umgebungsvariablen, siehe README.
+              ). Einzelheiten in DEPLOY.md.
             </p>
           </div>
         </div>

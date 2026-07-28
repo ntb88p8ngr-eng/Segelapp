@@ -18,16 +18,37 @@ welche Zugänge dafür nötig sind.
 | --- | --- | --- |
 | Deutscher Wetterdienst über [brightsky.dev](https://brightsky.dev) | Wind, Böen, Vorhersage | **Nein** — offen, kein Schlüssel, kein Konto |
 | [OpenStreetMap](https://www.openstreetmap.org) | Kartenkacheln | **Nein** — keine Anmeldung |
-| iCloud (CalDAV) | Vereinskalender lesen und schreiben | **Ja** — Apple-ID + app-spezifisches Passwort |
+| iCloud, öffentlich geteilter Kalender | Termine **anzeigen** | **Nein** — nur die Freigabe-Adresse |
+| iCloud, CalDAV | Termine anzeigen **und anlegen** | **Ja** — Apple-ID + app-spezifisches Passwort |
 
-Nur der Kalender braucht also echte Zugangsdaten. Wetter und Karte
-funktionieren nach dem Deployment sofort.
+Wetter und Karte funktionieren nach dem Deployment sofort. Beim Kalender hast
+du die Wahl, und nur die zweite Variante verlangt Zugangsdaten.
 
-Ohne Kalender-Zugangsdaten startet die Seite trotzdem: Wetter, Vorhersage und
-Karte laufen normal, der Kalenderbereich zeigt einen Hinweis, dass er noch
-nicht verbunden ist.
+Ohne jede Kalender-Konfiguration startet die Seite trotzdem: Wetter,
+Vorhersage und Karte laufen normal, der Kalenderbereich zeigt einen Hinweis,
+dass er noch nicht verbunden ist.
 
-## iCloud-Kalender freischalten
+## Variante 1: Öffentlicher Kalender (nur anzeigen)
+
+Der schnellste Weg und ohne Zugangsdaten. In der Kalender-App den Kalender
+freigeben, *Öffentlicher Kalender* aktivieren und die Adresse übernehmen:
+
+```
+ICLOUD_PUBLIC_CALENDAR_URL=webcal://p01-caldav.icloud.com/published/2/XXXXXXXX
+```
+
+`webcal://` und `https://` werden beide akzeptiert — es ist dieselbe Adresse,
+`webcal://` ist nur die Einladung ans Betriebssystem, sie zu abonnieren.
+
+Ein öffentlicher Kalender ist eine ausgelieferte Datei und nimmt keine neuen
+Termine entgegen. Die Seite blendet den Knopf "Termin vorschlagen" deshalb aus
+und kennzeichnet den Kalender als "nur Ansicht"; ein Schreibversuch über die
+API wird mit einer erklärenden Meldung abgelehnt.
+
+Bedenke: Wer die Adresse kennt, kann den Kalender abonnieren. Für einen
+Vereinsterminkalender ist das in der Regel gewollt.
+
+## Variante 2: CalDAV-Zugang (anzeigen und anlegen)
 
 1. Auf [appleid.apple.com](https://appleid.apple.com) anmelden.
 2. Unter *Anmelden & Sicherheit* → *App-spezifische Passwörter* ein neues
@@ -47,6 +68,9 @@ aktiv sein, sonst lassen sich keine app-spezifischen Passwörter erzeugen.
 
 Bleibt `ICLOUD_CALENDAR_NAME` leer, wird der erste beschreibbare Kalender des
 Kontos verwendet. Bei mehreren Kalendern besser den Namen angeben.
+
+Sind CalDAV-Zugangsdaten gesetzt, haben sie Vorrang — eine zusätzlich
+hinterlegte `ICLOUD_PUBLIC_CALENDAR_URL` wird dann ignoriert.
 
 **Dringende Empfehlung:** eine eigene Apple-ID für den Verein anlegen und dort
 nur den Vereinskalender führen. Ein app-spezifisches Passwort gilt für das
@@ -197,7 +221,11 @@ sudo systemctl restart segelapp
 
 | Symptom | Ursache |
 | --- | --- |
-| Kalenderbereich zeigt „noch nicht verbunden" | `ICLOUD_USERNAME` oder `ICLOUD_APP_PASSWORD` fehlt oder wurde nach dem Setzen nicht neu gestartet |
+| Kalenderbereich zeigt „noch nicht verbunden" | Weder `ICLOUD_PUBLIC_CALENDAR_URL` noch die CalDAV-Variablen gesetzt, oder nach dem Setzen nicht neu gestartet |
+| „Termin vorschlagen" fehlt, Kalender als „nur Ansicht" markiert | Es ist ein öffentlicher Kalender eingebunden; Schreiben braucht `ICLOUD_USERNAME` und `ICLOUD_APP_PASSWORD` |
+| „Die Adresse liefert keinen Kalender" | `ICLOUD_PUBLIC_CALENDAR_URL` zeigt auf eine Web- statt Freigabe-Adresse |
+| „Kalender-Feed antwortete mit 404" | Die öffentliche Freigabe wurde in iCloud wieder aufgehoben |
+| „Kalender-Feed … ist nicht erreichbar" | Der Server kommt nicht an `*.icloud.com` (Firewall, ausgehender Verkehr gesperrt) |
 | „Kalender-Termine konnten nicht geladen werden" | Zugangsdaten falsch, normales statt app-spezifisches Passwort, oder `ICLOUD_CALENDAR_NAME` passt zu keinem Kalender |
 | Keine Wetterdaten | Server kommt nicht an `api.brightsky.dev` (Firewall, ausgehender Verkehr gesperrt) |
 | Karte bleibt leer | Kacheln von `tile.openstreetmap.org` werden blockiert |

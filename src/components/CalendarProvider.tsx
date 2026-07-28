@@ -13,6 +13,8 @@ import { toLocalDateKey } from "@/lib/format";
 
 interface CalendarContextValue {
   configured: boolean;
+  /** Nur ein CalDAV-Zugang erlaubt das Anlegen von Terminen. */
+  canWrite: boolean;
   loading: boolean;
   events: ClubCalendarEvent[];
   message?: string;
@@ -86,6 +88,8 @@ export default function CalendarProvider({
     } catch {
       setState({
         configured: false,
+        canWrite: false,
+        source: "none",
         events: [],
         message: "Kalender konnte nicht geladen werden.",
       });
@@ -103,6 +107,7 @@ export default function CalendarProvider({
     const events = state?.events ?? [];
     return {
       configured: state?.configured ?? false,
+      canWrite: state?.canWrite ?? false,
       loading,
       events,
       message: state?.message,

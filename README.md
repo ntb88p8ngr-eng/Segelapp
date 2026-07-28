@@ -29,9 +29,11 @@ und ein Vereinskalender mit Schreibzugriff auf einen iCloud-Kalender.
 - **Animierte Windkarte** (Leaflet/OpenStreetMap): eine Partikelströmung im
   Stil der iOS-Wetter-App zeigt die Windrichtung über dem See; Geschwindigkeit
   und Strichlänge folgen Wind und Böen.
-- **Vereinskalender** mit Lese- und Schreibzugriff auf einen iCloud-Kalender
-  via CalDAV (serverseitig, keine Zugangsdaten im Browser). Tage, an denen
-  bereits ein Termin liegt, werden in der Vorhersage rot markiert.
+- **Vereinskalender** aus iCloud, wahlweise über einen öffentlich geteilten
+  Kalender (nur anzeigen, ohne Zugangsdaten) oder per CalDAV mit
+  Schreibrechten (serverseitig, keine Zugangsdaten im Browser). Serientermine
+  werden dabei in ihre Einzeltermine aufgelöst. Tage, an denen bereits ein
+  Termin liegt, werden in der Vorhersage rot markiert.
 - **Heller und dunkler Modus**, umschaltbar über einen Toggle, der von einem
   Segelboot auf ein Piratenschiff wechselt. Die Wahl wird gespeichert;
   ohne gespeicherte Wahl gilt die Systemeinstellung.
@@ -54,10 +56,34 @@ Ohne Netzzugang (oder um die Warnungen gezielt zu testen) liefert
 `DEMO_WEATHER=1 npm run dev` feste Demo-Wetterdaten inklusive Gewittertag
 und Sturmböen — siehe `src/lib/demoWeather.ts`.
 
-## iCloud-Kalender verbinden (Schreibzugriff)
+## iCloud-Kalender verbinden
 
 Der Kalender-Bereich zeigt ohne Konfiguration einen Hinweis "noch nicht
-verbunden" an. Um ihn zu aktivieren:
+verbunden" an. Es gibt zwei Wege, die sich in einem Punkt unterscheiden:
+ob die Seite Termine nur anzeigen oder auch anlegen darf.
+
+### Weg 1: Öffentlich geteilter Kalender (nur anzeigen)
+
+Ohne Zugangsdaten und in einer Minute eingerichtet. In der Kalender-App
+(Mac, iPhone oder iCloud.com) den Kalender freigeben, *Öffentlicher Kalender*
+aktivieren und die angezeigte Adresse übernehmen:
+
+```
+ICLOUD_PUBLIC_CALENDAR_URL=webcal://p01-caldav.icloud.com/published/2/XXXXXXXX
+```
+
+`webcal://` und `https://` werden beide akzeptiert. Ein öffentlicher Kalender
+ist eine ausgelieferte Datei — Termine lassen sich darüber **nicht** anlegen.
+Der Knopf "Termin vorschlagen" wird in diesem Modus ausgeblendet und der
+Kalender als "nur Ansicht" gekennzeichnet.
+
+Zu bedenken: Wer die Adresse kennt, kann den Kalender abonnieren. Für einen
+Terminkalender ist das meist gewollt, für Privates nicht.
+
+### Weg 2: CalDAV-Zugang (anzeigen und anlegen)
+
+Nötig, damit die Seite Termine schreiben kann. Sind diese Variablen gesetzt,
+haben sie Vorrang vor `ICLOUD_PUBLIC_CALENDAR_URL`.
 
 1. Ein **App-spezifisches Passwort** für die Apple-ID erstellen unter
    [appleid.apple.com](https://appleid.apple.com) → *Anmelden & Sicherheit*

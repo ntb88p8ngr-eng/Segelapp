@@ -35,6 +35,10 @@ und ein Vereinskalender mit Schreibzugriff auf einen iCloud-Kalender.
 - **Heller und dunkler Modus**, umschaltbar über einen Toggle, der von einem
   Segelboot auf ein Piratenschiff wechselt. Die Wahl wird gespeichert;
   ohne gespeicherte Wahl gilt die Systemeinstellung.
+- **Für Telefone ausgelegt**: zweispaltige Vorhersage statt endloser
+  Scrollstrecke, Bedienelemente ab 44 px (an den Zeigertyp gekoppelt, nicht
+  an die Bildschirmbreite) und eine Karte, die sich mit einem Finger nicht
+  vor den Seitenscroll drängt — verschoben wird sie dort mit zwei Fingern.
 
 ## Setup
 

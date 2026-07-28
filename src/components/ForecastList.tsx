@@ -76,7 +76,9 @@ export default function ForecastList({ forecast, bestDayIndex }: ForecastListPro
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      {/* Zwei Spalten schon auf Telefonen: einspaltig werden aus sechs Tagen
+          sonst mehrere Bildschirmhöhen Scrollstrecke. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         {forecast.map((day, idx) => {
           const dayEvents = eventsByDate.get(day.date) ?? [];
           const isBooked = configured && dayEvents.length > 0;
@@ -86,7 +88,7 @@ export default function ForecastList({ forecast, bestDayIndex }: ForecastListPro
             <div
               key={day.date}
               className={clsx(
-                "relative rounded-xl border p-4 transition hover:scale-[1.02]",
+                "relative rounded-xl border p-3 transition sm:p-4 sm:hover:scale-[1.02]",
                 // Unwettergefahr schlägt jede andere Einfärbung — auch eine
                 // Belegung oder eine an sich gute Windbewertung.
                 severe

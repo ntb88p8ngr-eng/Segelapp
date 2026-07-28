@@ -21,25 +21,27 @@ export default async function Home() {
 
   return (
     <CalendarProvider>
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-4 py-10 sm:px-6 lg:px-8">
-        <div className="flex justify-end">
-          <ThemeToggle />
-        </div>
-
-        <header className="-mt-6 flex flex-col items-center gap-3 text-center">
-          <div className="flex items-center gap-2 text-accent">
-            <Anchor className="h-6 w-6" />
-            <span className="text-sm uppercase tracking-[0.2em]">
-              Segelgemeinschaft
-            </span>
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-6 sm:gap-10 sm:px-6 sm:py-10 lg:px-8">
+        <header className="flex flex-col gap-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-accent">
+              <Anchor className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
+              <span className="text-xs uppercase tracking-[0.2em] sm:text-sm">
+                Segelgemeinschaft
+              </span>
+            </div>
+            <ThemeToggle />
           </div>
-          <h1 className="text-3xl font-bold text-ink sm:text-4xl">
-            Wind & Wetter am {overview.location.name}
-          </h1>
-          <p className="flex items-center gap-1.5 text-sm text-ink-muted">
-            <MapPin className="h-4 w-4" />
-            Live-Daten des Deutschen Wetterdienstes ({overview.source})
-          </p>
+
+          <div className="flex flex-col items-center gap-2 text-center">
+            <h1 className="text-2xl font-bold text-balance text-ink sm:text-4xl">
+              Wind & Wetter am {overview.location.name}
+            </h1>
+            <p className="flex items-center gap-1.5 text-xs text-ink-muted sm:text-sm">
+              <MapPin className="h-4 w-4 shrink-0" />
+              Live-Daten des Deutschen Wetterdienstes
+            </p>
+          </div>
         </header>
 
         <WeatherAlerts alerts={overview.alerts} />

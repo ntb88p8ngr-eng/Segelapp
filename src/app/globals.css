@@ -4,6 +4,10 @@
    System-Einstellung, damit der Toggle die Kontrolle behält. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
+/* Grösse von Bedienelementen am Zeigertyp festmachen, nicht an der
+   Bildschirmbreite: Ein Tablet mit 768px wird ebenso getippt wie ein Telefon. */
+@custom-variant touch (@media (pointer: coarse));
+
 /* Light: heller Seetag. */
 :root,
 :root[data-theme="light"] {
@@ -99,6 +103,19 @@ html[data-theme="dark"] .leaflet-tile-pane {
 
 .leaflet-popup-content-wrapper a {
   color: var(--accent);
+}
+
+/* Auf Touchgeräten sind Leaflets 30px-Knöpfe zu klein zum Treffen.
+   Der html-Präfix hebt die Spezifität über Leaflets eigene Regel, die
+   sonst gewinnt, weil ihr Stylesheet später geladen wird. */
+@media (pointer: coarse) {
+  html .leaflet-bar a,
+  html .leaflet-touch .leaflet-bar a {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+    font-size: 1.25rem;
+  }
 }
 
 /* Leaflet-Bedienelemente an das jeweilige Theme angleichen. */

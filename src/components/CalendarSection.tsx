@@ -89,7 +89,7 @@ export default function CalendarSection({ bestDay }: CalendarSectionProps) {
         {configured && (
           <button
             onClick={() => (formOpen ? setFormOpen(false) : openForm())}
-            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-90"
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white transition hover:opacity-90 touch:min-h-11"
           >
             <CalendarPlus className="h-4 w-4" />
             Termin vorschlagen
@@ -195,14 +195,14 @@ export default function CalendarSection({ bestDay }: CalendarSectionProps) {
             <button
               type="button"
               onClick={() => setFormOpen(false)}
-              className="rounded-lg px-3 py-1.5 text-sm text-ink-muted hover:bg-surface-inset"
+              className="rounded-lg px-4 py-1.5 text-sm text-ink-muted hover:bg-surface-inset touch:min-h-11"
             >
               Abbrechen
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className="rounded-lg bg-accent px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50 touch:min-h-11"
             >
               {submitting ? "Speichern…" : "Im iCloud-Kalender anlegen"}
             </button>

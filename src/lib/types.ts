@@ -55,6 +55,17 @@ export interface DailyForecast {
   hourly: WindObservation[];
 }
 
+/**
+ * Woher die Zahlen kommen. Bright Sky wählt die Station selbst — erst mit
+ * Name und Entfernung lässt sich beurteilen, wie gut sie den See abbildet.
+ */
+export interface WeatherStation {
+  name: string;
+  distanceKm: number | null;
+  /** z. B. "synop", "current", "forecast" — Messung oder Vorhersagemodell. */
+  observationType: string | null;
+}
+
 export type AlertSeverity = "warnung" | "hinweis";
 
 export type AlertKind = "gewitter" | "boeen";
@@ -78,6 +89,8 @@ export interface WeatherResponse {
   forecast: DailyForecast[];
   bestDayIndex: number | null;
   alerts: WeatherAlert[];
+  /** Station hinter den aktuellen Werten, sofern Bright Sky sie nennt. */
+  station: WeatherStation | null;
   fetchedAt: string;
 }
 

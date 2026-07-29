@@ -197,9 +197,13 @@ bereits in der Fusszeile beziehungsweise an der Karte — bitte drin lassen.
 
 **Fair use.** Bright Sky und die OSM-Kachelserver werden kostenlos
 bereitgestellt und sind nicht für hohe Last gedacht. Die Seite fragt Wetterdaten
-deshalb nur alle 10 Minuten neu ab (`revalidate = 600`), unabhängig von der
-Besucherzahl. Für einen Verein ist das unproblematisch. Bei deutlich mehr
-Verkehr: Bright Sky lässt sich selbst betreiben, und für Kacheln gibt es
+deshalb nur alle 10 Minuten neu ab, unabhängig von der Besucherzahl — die
+Seiten selbst werden pro Aufruf gerendert, aber der Abruf bei Bright Sky ist
+zwischengespeichert. Für einen Verein ist das unproblematisch.
+
+Bei deutlich mehr Verkehr lässt sich Bright Sky
+[selbst betreiben](https://brightsky.dev/docs/#self-hosting); die eigene
+Instanz wird über `BRIGHTSKY_BASE_URL` eingetragen. Für Kartenkacheln gibt es
 kostenpflichtige Anbieter.
 
 **Zugangsdaten schützen.** `.env.local` steht in `.gitignore` und darf dort

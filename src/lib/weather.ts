@@ -8,10 +8,18 @@ import type {
   SevereWeatherRisk,
   WeatherAlert,
   WeatherResponse,
+  WeatherStation,
   WindObservation,
 } from "./types";
 
-const BRIGHTSKY_BASE = "https://api.brightsky.dev";
+/**
+ * Adresse der Bright-Sky-Instanz. Überschreibbar, damit eine selbst
+ * betriebene Instanz genutzt werden kann — bei höherem Verkehr ist das der
+ * empfohlene Weg, statt den öffentlichen Dienst zu belasten.
+ */
+const BRIGHTSKY_BASE = (
+  process.env.BRIGHTSKY_BASE_URL || "https://api.brightsky.dev"
+).replace(/\/+$/, "");
 
 // Bright Sky (https://brightsky.dev) is an open-source JSON wrapper around
 // the raw data published by the Deutscher Wetterdienst (DWD) open data
@@ -42,6 +50,71 @@ function toObservation(r: BrightSkyRecord): WindObservation {
   };
 }
 
+/**
+ * /current_weather benennt Wind und Niederschlag anders als /weather: Dort
+ * tragen sie das Mittelungsintervall im Namen (wind_speed_10, _30, _60),
+ * während temperature schlicht heisst. Wer die schlichten Namen erwartet,
+ * bekommt für Wind, Böen und Niederschlag null — die Temperatur kommt an, der
+ * Rest bleibt leer.
+ *
+ * Gelesen wird das kürzeste verfügbare Intervall, weil es dem "jetzt" am
+ * nächsten kommt. Die schlichten Namen bleiben als Rückfallebene drin, falls
+ * Bright Sky sie doch mitliefert.
+ */
+type LooseRecord = Record<string, unknown>;
+
+function firstNumber(record: LooseRecord, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function firstString(record: LooseRecord, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value) return value;
+  }
+  return null;
+}
+
+function toCurrentObservation(raw: LooseRecord): WindObservation {
+  return {
+    timestamp:
+      firstString(raw, ["timestamp"]) ?? new Date().toISOString(),
+    windSpeedKmh: firstNumber(raw, [
+      "wind_speed_10",
+      "wind_speed_30",
+      "wind_speed_60",
+      "wind_speed",
+    ]),
+    windDirectionDeg: firstNumber(raw, [
+      "wind_direction_10",
+      "wind_direction_30",
+      "wind_direction_60",
+      "wind_direction",
+    ]),
+    windGustKmh: firstNumber(raw, [
+      "wind_gust_speed_10",
+      "wind_gust_speed_30",
+      "wind_gust_speed_60",
+      "wind_gust_speed",
+    ]),
+    temperatureC: firstNumber(raw, ["temperature"]),
+    condition: firstString(raw, ["condition"]),
+    // Beim Niederschlag ist die letzte Stunde die aussagekräftigere Zahl —
+    // 10 Minuten sind für "hat es geregnet?" zu kurz.
+    precipitationMm: firstNumber(raw, [
+      "precipitation_60",
+      "precipitation_30",
+      "precipitation_10",
+      "precipitation",
+    ]),
+    cloudCoverPercent: firstNumber(raw, ["cloud_cover"]),
+  };
+}
+
 async function fetchJson(url: string) {
   if (isDemoMode()) {
     return url.includes("current_weather") ? demoCurrentWeather() : demoForecast();
@@ -53,11 +126,53 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
-export async function fetchCurrentWeather(): Promise<WindObservation | null> {
+/** Liest die von Bright Sky mitgelieferte Stationsangabe. */
+function toStation(sources: unknown): WeatherStation | null {
+  if (!Array.isArray(sources) || !sources.length) return null;
+  const first = sources[0] as LooseRecord;
+  const name = firstString(first, ["station_name"]);
+  if (!name) return null;
+
+  const distanceMeters = firstNumber(first, ["distance"]);
+  return {
+    name,
+    distanceKm:
+      distanceMeters != null ? Math.round(distanceMeters / 100) / 10 : null,
+    observationType: firstString(first, ["observation_type"]),
+  };
+}
+
+export async function fetchCurrentWeather(): Promise<{
+  observation: WindObservation | null;
+  station: WeatherStation | null;
+}> {
   const url = `${BRIGHTSKY_BASE}/current_weather?lat=${AMMERSEE_LOCATION.lat}&lon=${AMMERSEE_LOCATION.lon}&units=dwd`;
   const data = await fetchJson(url);
-  if (!data?.weather) return null;
-  return toObservation(data.weather as BrightSkyRecord);
+  return {
+    observation: data?.weather
+      ? toCurrentObservation(data.weather as LooseRecord)
+      : null,
+    station: toStation(data?.sources),
+  };
+}
+
+/** Die Messung, die dem Jetzt am nächsten liegt. */
+function nearestObservation(
+  observations: WindObservation[],
+): WindObservation | null {
+  const now = Date.now();
+  let best: WindObservation | null = null;
+  let bestGap = Infinity;
+
+  for (const obs of observations) {
+    if (obs.windSpeedKmh == null) continue;
+    const gap = Math.abs(new Date(obs.timestamp).getTime() - now);
+    if (gap < bestGap) {
+      bestGap = gap;
+      best = obs;
+    }
+  }
+  return best;
 }
 
 function isoDate(d: Date): string {
@@ -421,10 +536,27 @@ function buildAlerts(
 }
 
 export async function getWeatherOverview(): Promise<WeatherResponse> {
-  const [current, forecast] = await Promise.all([
-    fetchCurrentWeather().catch(() => null),
+  const [currentResult, forecast] = await Promise.all([
+    fetchCurrentWeather().catch(() => ({ observation: null, station: null })),
     fetchForecast(6).catch(() => []),
   ]);
+
+  const reported = currentResult.observation;
+
+  // Nicht jede Station meldet durchgehend Wind. Fehlt er, ist die zeitlich
+  // nächste Stundenmessung besser als ein leeres Dashboard.
+  let current = reported;
+  if (!current || current.windSpeedKmh == null) {
+    const fallback = nearestObservation(forecast.flatMap((day) => day.hourly));
+    if (fallback) {
+      current = {
+        ...fallback,
+        // Temperatur und Zustand der Direktmeldung sind aktueller, falls da.
+        temperatureC: reported?.temperatureC ?? fallback.temperatureC,
+        condition: reported?.condition ?? fallback.condition,
+      };
+    }
+  }
 
   let bestDayIndex: number | null = null;
   if (forecast.length) {
@@ -444,6 +576,7 @@ export async function getWeatherOverview(): Promise<WeatherResponse> {
     forecast,
     bestDayIndex,
     alerts: buildAlerts(current, forecast),
+    station: currentResult.station,
     fetchedAt: new Date().toISOString(),
   };
 }

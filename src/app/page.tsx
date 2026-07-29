@@ -8,7 +8,10 @@ import SailingMap from "@/components/SailingMapLoader";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getWeatherOverview } from "@/lib/weather";
 
-export const revalidate = 600;
+// Wie bei /api/weather: pro Aufruf rendern, damit nach einem Deployment nicht
+// der Build-Stand ausgeliefert wird. Der Wetterabruf selbst bleibt 10 Minuten
+// zwischengespeichert.
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const overview = await getWeatherOverview();
@@ -37,9 +40,16 @@ export default async function Home() {
             <h1 className="text-2xl font-bold text-balance text-ink sm:text-4xl">
               Wind & Wetter am {overview.location.name}
             </h1>
-            <p className="flex items-center gap-1.5 text-xs text-ink-muted sm:text-sm">
+            <p className="flex flex-wrap items-center justify-center gap-1.5 text-xs text-ink-muted sm:text-sm">
               <MapPin className="h-4 w-4 shrink-0" />
               Live-Daten des Deutschen Wetterdienstes
+              {overview.station && (
+                <span className="text-ink-soft">
+                  · Station {overview.station.name}
+                  {overview.station.distanceKm != null &&
+                    ` (${overview.station.distanceKm.toLocaleString("de-DE")} km)`}
+                </span>
+              )}
             </p>
           </div>
         </header>

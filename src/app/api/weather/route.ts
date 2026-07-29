@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { getWeatherOverview } from "@/lib/weather";
 
-export const revalidate = 600;
+/**
+ * Nicht zur Build-Zeit vorrendern: Sonst liefert die Route nach jedem
+ * Deployment erst den Schnappschuss vom Build — im schlechtesten Fall leer,
+ * weil die Build-Umgebung Bright Sky nicht erreicht.
+ *
+ * Bright Sky wird dadurch nicht häufiger belastet: Der Abruf in weather.ts
+ * ist mit `next: { revalidate: 600 }` zwischengespeichert, also höchstens
+ * alle 10 Minuten, unabhängig von der Zahl der Besucher.
+ */
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {

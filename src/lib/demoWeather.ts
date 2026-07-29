@@ -17,16 +17,25 @@ export function isDemoMode(): boolean {
 
 export function demoCurrentWeather() {
   return {
+    // Feldnamen wie bei /current_weather: Wind und Niederschlag tragen dort
+    // das Mittelungsintervall im Namen, nur temperature heisst schlicht.
     weather: {
       timestamp: new Date().toISOString(),
-      wind_speed: 24,
-      wind_direction: 250,
-      wind_gust_speed: 41,
+      wind_speed_10: 24,
+      wind_direction_10: 250,
+      wind_gust_speed_10: 41,
       temperature: 22,
       condition: "dry",
-      precipitation: 0,
+      precipitation_60: 0,
       cloud_cover: 30,
     },
+    sources: [
+      {
+        station_name: "Raisting (Demo)",
+        distance: 6400,
+        observation_type: "synop",
+      },
+    ],
   };
 }
 

@@ -90,6 +90,7 @@ export default function WindDashboard({ current, locationName }: WindDashboardPr
                 ? `${current.precipitationMm.toFixed(1)} mm`
                 : "–"
             }
+            sub={current.precipitationMm != null ? "letzte 60 Min" : undefined}
           />
         </div>
       </div>

@@ -151,37 +151,61 @@ aussen erreichbar sein.
 
 ## Variante C: Docker
 
-```dockerfile
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+`Dockerfile`, `.dockerignore` und `docker-compose.yml` liegen im Repository.
 
-FROM node:22-alpine
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=build /app/.next ./.next
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/public ./public
-COPY --from=build /app/package.json ./
-EXPOSE 3000
-CMD ["npx", "next", "start"]
+```bash
+cp .env.example segelapp.env     # ausfüllen, kann auch leer bleiben
+docker compose up -d --build
 ```
+
+### Aktualisieren — der häufigste Stolperstein
+
+Ein `git pull` allein ändert am laufenden Container **nichts**: Der Build
+steckt im Image, nicht im Arbeitsverzeichnis. Und `docker compose up -d`
+ohne `--build` startet lediglich das alte Image neu.
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Ob der neue Stand läuft, zeigt ein Blick auf eine Route, die es erst seit
+Kurzem gibt:
+
+```bash
+curl http://127.0.0.1:3000/api/waypoints
+# {"waypoints":[]}  -> neuer Stand
+# 404               -> es läuft noch das alte Image
+```
+
+### Wegpunkte überleben nur mit Volume
+
+Die Wegpunkte liegen im Container unter `/data/waypoints.json`. Das
+`docker-compose.yml` hängt dort ein benanntes Volume ein — ohne das wären sie
+nach jedem `--build` verschwunden. Sichern lassen sie sich so:
+
+```bash
+docker compose cp segelapp:/data/waypoints.json ./waypoints-backup.json
+```
+
+### Unterpfad
+
+Das Präfix muss beim **Bauen** bekannt sein und gehört deshalb in die
+Build-Argumente, nicht in `segelapp.env`:
 
 ```yaml
-services:
-  segelapp:
-    build: .
-    restart: unless-stopped
-    ports: ["127.0.0.1:3000:3000"]
-    env_file: ./segelapp.env
+build:
+  context: .
+  args:
+    NEXT_PUBLIC_BASE_PATH: "/segelapp"
 ```
 
-Für ein deutlich kleineres Image lässt sich in `next.config.ts`
-`output: "standalone"` setzen; dann genügt es, `.next/standalone`,
-`.next/static` und `public` zu kopieren und mit `node server.js` zu starten.
+### Warum eine eigene .dockerignore nötig ist
+
+Ohne sie kopiert `COPY . .` die `node_modules` und den `.next`-Ordner des
+Hosts (zusammen mehrere hundert MB) in den Build-Kontext — und überschreibt
+dabei die im Image frisch installierten Abhängigkeiten. Auf einem anderen
+Betriebssystem als Alpine übersetzte Binärmodule brechen dadurch.
 
 ## Wassertemperatur (optional)
 

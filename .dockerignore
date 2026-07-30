@@ -1,0 +1,20 @@
+# Ohne diese Liste kopiert "COPY . ." die node_modules und den .next-Ordner
+# des Hosts (zusammen mehrere hundert MB) in den Build-Kontext — und
+# überschreibt dabei die im Image frisch installierten Abhängigkeiten. Auf
+# einem anderen Betriebssystem als Alpine gebaute Binärmodule brechen damit.
+node_modules
+.next
+.data
+
+.git
+.gitignore
+
+# Zugangsdaten gehören nicht ins Image.
+.env
+.env.*
+!.env.example
+
+npm-debug.log*
+*.tsbuildinfo
+Dockerfile
+.dockerignore

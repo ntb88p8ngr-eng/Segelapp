@@ -1,0 +1,27 @@
+services:
+  segelapp:
+    build:
+      context: .
+      args:
+        # Nur setzen, wenn die Seite unter einem Unterpfad läuft,
+        # z. B. "/segelapp". Muss beim Bauen bekannt sein.
+        NEXT_PUBLIC_BASE_PATH: ""
+    restart: unless-stopped
+
+    # Nur lokal veröffentlichen — davor gehört ein Reverse Proxy mit TLS.
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    # Zugangsdaten (iCloud, Wassertemperatur …). Datei anlegen, notfalls leer:
+    #   cp .env.example segelapp.env
+    env_file:
+      - path: ./segelapp.env
+        required: false
+
+    volumes:
+      # Ohne dieses Volume wären die gemeinsamen Wegpunkte nach jedem
+      # "docker compose up --build" verschwunden.
+      - waypoints:/data
+
+volumes:
+  waypoints:

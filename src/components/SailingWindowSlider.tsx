@@ -1,11 +1,10 @@
 "use client";
 
-import { Clock, RotateCcw } from "lucide-react";
-import {
-  MIN_WINDOW_HOURS,
-  WINDOW_BOUNDS,
-  useForecast,
-} from "./ForecastProvider";
+import { useMemo } from "react";
+import { RotateCcw, Sunrise, Sunset } from "lucide-react";
+import { AMMERSEE_LOCATION } from "@/lib/locations";
+import { daylightHours } from "@/lib/sun";
+import { MIN_WINDOW_HOURS, useForecast } from "./ForecastProvider";
 
 /**
  * Zwei getrennte Regler statt eines Doppelgriffs: Ein echter Doppelgriff
@@ -13,77 +12,74 @@ import {
  * bedienen. Zwei native Regler sind sofort barrierefrei.
  */
 export default function SailingWindowSlider() {
-  const { window: sailingWindow, setWindow, resetWindow, isCustomWindow } =
+  const { window: sailingWindow, setWindow, resetWindow, isCustomWindow, forecast } =
     useForecast();
 
+  // Grenzen folgen dem Tageslicht: Im Oktober ist 20 Uhr keine Segelzeit mehr.
+  const bounds = useMemo(() => {
+    const day = forecast[0]?.date;
+    const { firstHour, lastHour, sunrise, sunset } = daylightHours(
+      day ? new Date(day) : new Date(),
+      AMMERSEE_LOCATION.lat,
+      AMMERSEE_LOCATION.lon,
+    );
+    return {
+      min: Math.max(0, firstHour),
+      max: Math.min(24, lastHour),
+      sunrise,
+      sunset,
+    };
+  }, [forecast]);
+
   const { startHour, endHour } = sailingWindow;
+  const range = Math.max(1, bounds.max - bounds.min);
 
   function changeStart(value: number) {
-    // Ende mitschieben, damit die Spanne nie unter drei Stunden fällt.
-    const start = Math.min(value, WINDOW_BOUNDS.max - MIN_WINDOW_HOURS);
+    const start = Math.min(value, bounds.max - MIN_WINDOW_HOURS);
     setWindow({
       startHour: start,
-      endHour: Math.max(endHour, start + MIN_WINDOW_HOURS),
+      endHour: Math.min(bounds.max, Math.max(endHour, start + MIN_WINDOW_HOURS)),
     });
   }
 
   function changeEnd(value: number) {
-    const end = Math.max(value, WINDOW_BOUNDS.min + MIN_WINDOW_HOURS);
+    const end = Math.max(value, bounds.min + MIN_WINDOW_HOURS);
     setWindow({
-      startHour: Math.min(startHour, end - MIN_WINDOW_HOURS),
+      startHour: Math.max(bounds.min, Math.min(startHour, end - MIN_WINDOW_HOURS)),
       endHour: end,
     });
   }
 
-  const span = endHour - startHour;
-  const left =
-    ((startHour - WINDOW_BOUNDS.min) / (WINDOW_BOUNDS.max - WINDOW_BOUNDS.min)) *
-    100;
-  const width = (span / (WINDOW_BOUNDS.max - WINDOW_BOUNDS.min)) * 100;
+  const left = ((Math.max(startHour, bounds.min) - bounds.min) / range) * 100;
+  const width = ((Math.min(endHour, bounds.max) - Math.max(startHour, bounds.min)) / range) * 100;
+
+  const time = (value: number) => {
+    const h = Math.floor(value);
+    const m = Math.round((value - h) * 60);
+    return `${h}:${String(m).padStart(2, "0")}`;
+  };
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-medium text-ink">
-          <Clock className="h-4 w-4 text-accent" />
-          Segelzeit
-          <span className="font-semibold text-accent">
-            {startHour}–{endHour} Uhr
-          </span>
-          <span className="text-xs font-normal text-ink-muted">
-            ({span} Std.)
-          </span>
-        </p>
-
-        {isCustomWindow && (
-          <button
-            type="button"
-            onClick={resetWindow}
-            className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1 text-xs text-ink-muted transition hover:text-ink touch:min-h-11"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Zurücksetzen
-          </button>
-        )}
-      </div>
-
-      <p className="mt-1 text-xs text-ink-muted">
-        Bewertung und Zeitempfehlung beziehen sich nur auf diese Spanne.
-      </p>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-surface px-3 py-2">
+      <span className="text-xs text-ink-muted">
+        Segelzeit{" "}
+        <span className="font-semibold text-accent">
+          {startHour}–{endHour} Uhr
+        </span>
+      </span>
 
       {/* Schiene mit hervorgehobener Auswahl; die Regler liegen darüber. */}
-      <div className="relative mt-4 h-10">
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-surface-inset" />
+      <div className="relative h-7 min-w-[10rem] flex-1">
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-surface-inset" />
         <div
-          className="pointer-events-none absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-accent/70"
+          className="pointer-events-none absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-accent/70"
           style={{ left: `${left}%`, width: `${width}%` }}
         />
-
         <input
           type="range"
           aria-label="Beginn der Segelzeit"
-          min={WINDOW_BOUNDS.min}
-          max={WINDOW_BOUNDS.max - MIN_WINDOW_HOURS}
+          min={bounds.min}
+          max={bounds.max - MIN_WINDOW_HOURS}
           value={startHour}
           onChange={(e) => changeStart(Number(e.target.value))}
           className="range-thumb absolute inset-x-0 top-1/2 w-full -translate-y-1/2"
@@ -91,18 +87,35 @@ export default function SailingWindowSlider() {
         <input
           type="range"
           aria-label="Ende der Segelzeit"
-          min={WINDOW_BOUNDS.min + MIN_WINDOW_HOURS}
-          max={WINDOW_BOUNDS.max}
+          min={bounds.min + MIN_WINDOW_HOURS}
+          max={bounds.max}
           value={endHour}
           onChange={(e) => changeEnd(Number(e.target.value))}
           className="range-thumb absolute inset-x-0 top-1/2 w-full -translate-y-1/2"
         />
       </div>
 
-      <div className="flex justify-between text-[11px] text-ink-soft">
-        <span>{WINDOW_BOUNDS.min} Uhr</span>
-        <span>{WINDOW_BOUNDS.max} Uhr</span>
-      </div>
+      <span
+        className="flex items-center gap-1 text-[11px] text-ink-soft"
+        title="Die Grenzen des Reglers folgen Sonnenauf- und -untergang."
+      >
+        <Sunrise className="h-3.5 w-3.5" />
+        {time(bounds.sunrise.getHours() + bounds.sunrise.getMinutes() / 60)}
+        <Sunset className="ml-1 h-3.5 w-3.5" />
+        {time(bounds.sunset.getHours() + bounds.sunset.getMinutes() / 60)}
+      </span>
+
+      {isCustomWindow && (
+        <button
+          type="button"
+          onClick={resetWindow}
+          aria-label="Segelzeit zurücksetzen"
+          title="Zurücksetzen"
+          className="flex items-center justify-center rounded-lg border border-line p-1.5 text-ink-muted transition hover:text-ink"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }

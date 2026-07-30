@@ -95,6 +95,12 @@ export interface WeatherStation {
   observationType: string | null;
 }
 
+/** Messwert einer frei konfigurierten Wassertemperatur-Quelle. */
+export interface WaterTemperature {
+  celsius: number;
+  measuredAt: string | null;
+}
+
 export type AlertSeverity = "warnung" | "hinweis";
 
 export type AlertKind = "gewitter" | "boeen";
@@ -120,6 +126,8 @@ export interface WeatherResponse {
   alerts: WeatherAlert[];
   /** Station hinter den aktuellen Werten, sofern Bright Sky sie nennt. */
   station: WeatherStation | null;
+  /** Nur gesetzt, wenn eine Quelle konfiguriert ist. */
+  waterTemperature: WaterTemperature | null;
   fetchedAt: string;
 }
 

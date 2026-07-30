@@ -6,6 +6,7 @@ import CalendarProvider from "@/components/CalendarProvider";
 import ForecastProvider from "@/components/ForecastProvider";
 import SailingWindowSlider from "@/components/SailingWindowSlider";
 import RefreshButton from "@/components/RefreshButton";
+import TodayWindChart from "@/components/TodayWindChart";
 import WeatherAlerts from "@/components/WeatherAlerts";
 import SailingMap from "@/components/SailingMapLoader";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -72,6 +73,10 @@ export default async function Home() {
               current={overview.current}
               locationName={overview.location.name}
             />
+          </section>
+
+          <section>
+            <TodayWindChart />
           </section>
 
           <section>

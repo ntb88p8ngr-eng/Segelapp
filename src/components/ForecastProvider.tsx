@@ -8,12 +8,14 @@ import {
   useSyncExternalStore,
 } from "react";
 import { DEFAULT_SAILING_WINDOW, summariseDay } from "@/lib/scoring";
+import { AMMERSEE_LOCATION } from "@/lib/locations";
+import { daylightHours } from "@/lib/sun";
 import type { DailyForecast, SailingWindow } from "@/lib/types";
 
 const STORAGE_KEY = "segelapp-sailing-window";
 
-/** Frühester und spätester wählbarer Zeitpunkt des Reglers. */
-export const WINDOW_BOUNDS = { min: 5, max: 23 };
+/** Äusserste zulässige Werte einer gespeicherten Auswahl. */
+export const WINDOW_BOUNDS = { min: 0, max: 24 };
 /** Kürzeste sinnvolle Spanne — darunter gibt es kein 3-Stunden-Fenster. */
 export const MIN_WINDOW_HOURS = 3;
 
@@ -126,17 +128,38 @@ export default function ForecastProvider({
     window.dispatchEvent(new Event(CHANGE_EVENT));
   }, []);
 
+  /**
+   * Auf das Tageslicht begrenzen. Eine im Sommer gespeicherte Auswahl von
+   * 9 bis 20 Uhr wäre im Winter zur Hälfte Nacht — dann würde die Bewertung
+   * Stunden einbeziehen, in denen niemand segelt.
+   */
+  const effectiveWindow = useMemo<SailingWindow>(() => {
+    const day = initialForecast[0]?.date;
+    const { firstHour, lastHour } = daylightHours(
+      day ? new Date(day) : new Date(),
+      AMMERSEE_LOCATION.lat,
+      AMMERSEE_LOCATION.lon,
+    );
+    const min = Math.max(WINDOW_BOUNDS.min, firstHour);
+    const max = Math.min(WINDOW_BOUNDS.max, lastHour);
+    if (max - min < MIN_WINDOW_HOURS) return { startHour: min, endHour: max };
+
+    const start = Math.min(Math.max(sailingWindow.startHour, min), max - MIN_WINDOW_HOURS);
+    const end = Math.max(Math.min(sailingWindow.endHour, max), start + MIN_WINDOW_HOURS);
+    return { startHour: start, endHour: end };
+  }, [initialForecast, sailingWindow]);
+
   const isCustomWindow =
-    sailingWindow.startHour !== DEFAULT_SAILING_WINDOW.startHour ||
-    sailingWindow.endHour !== DEFAULT_SAILING_WINDOW.endHour;
+    effectiveWindow.startHour !== DEFAULT_SAILING_WINDOW.startHour ||
+    effectiveWindow.endHour !== DEFAULT_SAILING_WINDOW.endHour;
 
   const forecast = useMemo(() => {
     // Ohne Abweichung von der Vorgabe bleibt die Server-Berechnung stehen.
     if (!isCustomWindow) return initialForecast;
     return initialForecast
-      .map((day) => summariseDay(day.date, day.hourly, sailingWindow))
+      .map((day) => summariseDay(day.date, day.hourly, effectiveWindow))
       .filter((day): day is DailyForecast => day !== null);
-  }, [initialForecast, sailingWindow, isCustomWindow]);
+  }, [initialForecast, effectiveWindow, isCustomWindow]);
 
   const bestDayIndex = useMemo(() => {
     if (!forecast.length) return null;
@@ -150,7 +173,7 @@ export default function ForecastProvider({
 
   const value = useMemo<ForecastContextValue>(
     () => ({
-      window: sailingWindow,
+      window: effectiveWindow,
       setWindow,
       resetWindow,
       isCustomWindow,
@@ -158,7 +181,7 @@ export default function ForecastProvider({
       bestDayIndex,
       bestDay: bestDayIndex != null ? forecast[bestDayIndex] : null,
     }),
-    [sailingWindow, setWindow, resetWindow, isCustomWindow, forecast, bestDayIndex],
+    [effectiveWindow, setWindow, resetWindow, isCustomWindow, forecast, bestDayIndex],
   );
 
   return (

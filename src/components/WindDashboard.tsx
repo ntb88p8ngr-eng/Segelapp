@@ -1,14 +1,19 @@
 import CompassRose from "./CompassRose";
 import { formatKnots } from "@/lib/format";
-import type { WindObservation } from "@/lib/types";
-import { Wind, Gauge, Thermometer, Droplets } from "lucide-react";
+import type { WaterTemperature, WindObservation } from "@/lib/types";
+import { Wind, Gauge, Thermometer, Droplets, Waves } from "lucide-react";
 
 interface WindDashboardProps {
   current: WindObservation | null;
   locationName: string;
+  waterTemperature?: WaterTemperature | null;
 }
 
-export default function WindDashboard({ current, locationName }: WindDashboardProps) {
+export default function WindDashboard({
+  current,
+  locationName,
+  waterTemperature,
+}: WindDashboardProps) {
   if (!current) {
     return (
       <div className="rounded-2xl border border-line bg-surface p-8 text-center text-ink-muted">
@@ -41,7 +46,7 @@ export default function WindDashboard({ current, locationName }: WindDashboardPr
             Uhr
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
           <Stat
             icon={<Wind className="h-4 w-4" />}
             label="Wind"
@@ -92,6 +97,21 @@ export default function WindDashboard({ current, locationName }: WindDashboardPr
             }
             sub={current.precipitationMm != null ? "letzte 60 Min" : undefined}
           />
+          {waterTemperature && (
+            <Stat
+              icon={<Waves className="h-4 w-4" />}
+              label="Wasser"
+              value={`${waterTemperature.celsius.toFixed(1)}°C`}
+              sub={
+                waterTemperature.measuredAt
+                  ? new Date(waterTemperature.measuredAt).toLocaleDateString("de-DE", {
+                      day: "2-digit",
+                      month: "2-digit",
+                    })
+                  : undefined
+              }
+            />
+          )}
         </div>
       </div>
     </div>

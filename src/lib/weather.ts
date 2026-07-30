@@ -1,6 +1,7 @@
 import { AMMERSEE_LOCATION } from "./locations";
 import { demoCurrentWeather, demoForecast, isDemoMode } from "./demoWeather";
 import { formatKnots, formatShortDate, formatWeekday } from "./format";
+import { fetchWaterTemperature } from "./waterTemperature";
 import {
   DEFAULT_SAILING_WINDOW,
   GUST_STORM_KMH,
@@ -340,9 +341,10 @@ function buildAlerts(
 export async function getWeatherOverview(
   window: SailingWindow = DEFAULT_SAILING_WINDOW,
 ): Promise<WeatherResponse> {
-  const [currentResult, forecast] = await Promise.all([
+  const [currentResult, forecast, waterTemperature] = await Promise.all([
     fetchCurrentWeather().catch(() => ({ observation: null, station: null })),
     fetchForecast(6, window).catch(() => []),
+    fetchWaterTemperature().catch(() => null),
   ]);
 
   const current = pickCurrent(currentResult.observation, forecast);
@@ -366,6 +368,7 @@ export async function getWeatherOverview(
     bestDayIndex,
     alerts: buildAlerts(current, forecast),
     station: currentResult.station,
+    waterTemperature,
     fetchedAt: new Date().toISOString(),
   };
 }

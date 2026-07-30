@@ -28,6 +28,15 @@ und ein Vereinskalender mit Schreibzugriff auf einen iCloud-Kalender.
 - **Kühlere Ausweichzeit**: Wird im empfohlenen Fenster mehr als 28 °C
   erreicht, sucht die Seite das kühlste Fenster, das seglerisch noch taugt —
   Hitze soll nicht gegen Flaute getauscht werden.
+- **Windverlauf heute** als Kurve: Wind und Böen über den Tag, mit
+  Fadenkreuz und Werteanzeige, hervorgehobener Segelzeit und abgedunkelter
+  Nacht. Die Reihenfarben sind gegen hellen und dunklen Grund auf
+  Farbfehlsichtigkeit und Kontrast geprüft; die Böenlinie ist zusätzlich
+  gestrichelt, damit die Unterscheidung nicht allein an der Farbe hängt.
+- **Sonnenauf- und -untergang** begrenzen den Regler — im Oktober ist 20 Uhr
+  keine Segelzeit mehr. Die Zeiten werden lokal gerechnet, ohne Netzabruf.
+- **Wassertemperatur** aus einer frei konfigurierbaren Quelle
+  (`WATER_TEMPERATURE_URL`), siehe DEPLOY.md.
 - **Gemeinsame Wegpunkte**: Auf die Karte tippen legt einen Punkt an, den alle
   sehen und alle wieder löschen können.
 - **Aktualisieren-Knopf**, der den Zwischenspeicher gezielt verwirft; während

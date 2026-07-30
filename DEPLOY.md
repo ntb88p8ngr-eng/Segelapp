@@ -183,6 +183,27 @@ Für ein deutlich kleineres Image lässt sich in `next.config.ts`
 `output: "standalone"` setzen; dann genügt es, `.next/standalone`,
 `.next/static` und `public` zu kopieren und mit `node server.js` zu starten.
 
+## Wassertemperatur (optional)
+
+Für den Wind genügt Bright Sky; für die **Wassertemperatur nicht** — die
+DWD-Daten dahinter enthalten keine Seewassertemperaturen. Für bayerische Seen
+führt sie der Gewässerkundliche Dienst Bayern (gkd.bayern.de), andere Regionen
+haben eigene Stellen.
+
+Deshalb ist die Quelle frei wählbar statt fest verdrahtet:
+
+```
+WATER_TEMPERATURE_URL=https://example.org/ammersee.json
+```
+
+Erwartet wird JSON. Erkannt werden die üblichen Feldnamen für den Messwert
+(`temperature`, `value`, `celsius`, `wert`) und den Zeitpunkt — sowohl direkt
+im Objekt als auch im ersten Element einer Liste; deutsches Komma ist erlaubt.
+Passt eine Quelle nicht in dieses Schema, genügt ein kleiner Cronjob, der die
+Zahl einmal je Stunde in eine statische JSON-Datei schreibt.
+
+Ohne gesetzte Variable bleibt die Kachel einfach aus.
+
 ## Wegpunkte
 
 Die gemeinsamen Kartenpunkte liegen in einer JSON-Datei. Vorgabe ist

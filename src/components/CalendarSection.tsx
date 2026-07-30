@@ -5,6 +5,7 @@ import { CalendarPlus, CalendarClock, AlertCircle, Loader2, Eye } from "lucide-r
 import type { ClubCalendarEvent, DailyForecast } from "@/lib/types";
 import { formatDateTimeLocal, formatTimeRange } from "@/lib/format";
 import { useCalendar } from "./CalendarProvider";
+import { apiUrl } from "@/lib/basePath";
 
 interface CalendarSectionProps {
   bestDay: DailyForecast | null;
@@ -55,7 +56,7 @@ export default function CalendarSection({ bestDay }: CalendarSectionProps) {
     setSubmitting(true);
     setFormError(null);
     try {
-      const res = await fetch("/api/calendar", {
+      const res = await fetch(apiUrl("/api/calendar"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

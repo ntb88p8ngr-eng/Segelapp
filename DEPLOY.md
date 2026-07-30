@@ -183,6 +183,36 @@ Für ein deutlich kleineres Image lässt sich in `next.config.ts`
 `output: "standalone"` setzen; dann genügt es, `.next/standalone`,
 `.next/static` und `public` zu kopieren und mit `node server.js` zu starten.
 
+## Unter einem Unterpfad ausliefern
+
+Läuft die Seite nicht auf einer eigenen (Sub-)Domain, sondern als Unterseite —
+etwa `https://verein.de/segelapp` — muss das Präfix beim **Bauen** bekannt
+sein:
+
+```
+NEXT_PUBLIC_BASE_PATH=/segelapp
+```
+
+Der Reverse Proxy muss den Pfad dann **unverändert** durchreichen, nicht das
+Präfix abschneiden:
+
+```
+verein.de {
+    handle_path /segelapp/* {
+        # falsch: schneidet /segelapp ab
+    }
+    handle /segelapp/* {
+        reverse_proxy 127.0.0.1:3000   # richtig: Pfad bleibt vollständig
+    }
+}
+```
+
+Ohne die Variable verweist das ausgelieferte HTML auf `/_next/...` statt auf
+`/segelapp/_next/...`; die Seite käme dann ohne Gestaltung an.
+
+Auf einer eigenen (Sub-)Domain wird die Variable **nicht** gesetzt — dort
+ändert sich nichts.
+
 ## Zugangsdaten ändern
 
 Die Variablen werden bei jeder Anfrage aus `process.env` gelesen, nicht in den

@@ -10,6 +10,7 @@ import {
 } from "react";
 import type { CalendarApiResponse, ClubCalendarEvent } from "@/lib/types";
 import { toLocalDateKey } from "@/lib/format";
+import { apiUrl } from "@/lib/basePath";
 
 interface CalendarContextValue {
   configured: boolean;
@@ -82,7 +83,7 @@ export default function CalendarProvider({
 
   const reload = useCallback(async () => {
     try {
-      const res = await fetch("/api/calendar");
+      const res = await fetch(apiUrl("/api/calendar"));
       const data: CalendarApiResponse = await res.json();
       setState(data);
     } catch {

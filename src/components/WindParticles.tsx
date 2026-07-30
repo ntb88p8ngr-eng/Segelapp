@@ -2,6 +2,13 @@
 
 import { useEffect, useRef } from "react";
 
+/** Bildschirmposition eines festen Kartenpunkts, plus Zoomstufe. */
+export interface MapAnchor {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
 interface WindParticlesProps {
   /** Meteorologische Windrichtung in Grad: die Richtung, aus der der Wind kommt. */
   directionDeg: number;
@@ -9,6 +16,11 @@ interface WindParticlesProps {
   gustKmh?: number | null;
   /** Strichfarbe als "r, g, b" — die Deckkraft setzt die Animation selbst. */
   streakColor?: string;
+  /**
+   * Liefert die aktuelle Bildschirmposition eines festen Kartenpunkts. Damit
+   * folgen die Partikel der Karte, statt beim Verschieben stehenzubleiben.
+   */
+  getAnchor?: () => MapAnchor | null;
   className?: string;
 }
 
@@ -47,9 +59,17 @@ export default function WindParticles({
   windSpeedKmh,
   gustKmh,
   streakColor = "186, 230, 253",
+  getAnchor,
   className,
 }: WindParticlesProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Über ein Ref gehalten, damit ein Neuaufbau der Funktion die laufende
+  // Animation nicht neu startet.
+  const anchorFnRef = useRef(getAnchor);
+
+  useEffect(() => {
+    anchorFnRef.current = getAnchor;
+  }, [getAnchor]);
   // Über Refs gehalten, damit Richtungs-/Geschwindigkeitswechsel die
   // laufende Animation nicht neu starten, sondern sanft übernommen werden.
   const targetRef = useRef({
@@ -111,9 +131,49 @@ export default function WindParticles({
       return { x: Math.sin(towardRad), y: -Math.cos(towardRad) };
     }
 
+    // Letzte bekannte Lage des Kartenankers, um Verschiebungen zu erkennen.
+    let lastAnchor: MapAnchor | null = null;
+
+    /**
+     * Verschiebt und skaliert die Partikel so, wie sich die Karte bewegt hat.
+     * Damit kleben die Striche am Wasser statt am Bildschirm.
+     */
+    function followMap() {
+      const anchor = anchorFnRef.current?.() ?? null;
+      if (!anchor) return;
+
+      if (lastAnchor) {
+        if (anchor.zoom !== lastAnchor.zoom) {
+          // Beim Zoomen bleiben die Abstände zum Ankerpunkt massstäblich.
+          const scale = Math.pow(2, anchor.zoom - lastAnchor.zoom);
+          for (const p of particles) {
+            p.x = anchor.x + (p.x - lastAnchor.x) * scale;
+            p.y = anchor.y + (p.y - lastAnchor.y) * scale;
+          }
+        } else {
+          const dx = anchor.x - lastAnchor.x;
+          const dy = anchor.y - lastAnchor.y;
+          if (dx !== 0 || dy !== 0) {
+            for (const p of particles) {
+              p.x += dx;
+              p.y += dy;
+            }
+            // Die stehengebliebenen Spuren sonst mitziehen zu wollen wäre
+            // teuer — sie werden ohnehin binnen Sekundenbruchteilen weich
+            // ausgeblendet.
+            ctx!.clearRect(0, 0, width, height);
+          }
+        }
+      }
+
+      lastAnchor = anchor;
+    }
+
     function draw(now: number) {
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
+
+      followMap();
 
       const target = targetFlow();
       const targetSpeed = targetRef.current.windSpeedKmh;

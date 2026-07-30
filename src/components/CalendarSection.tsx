@@ -5,11 +5,8 @@ import { CalendarPlus, CalendarClock, AlertCircle, Loader2, Eye } from "lucide-r
 import type { ClubCalendarEvent, DailyForecast } from "@/lib/types";
 import { formatDateTimeLocal, formatTimeRange } from "@/lib/format";
 import { useCalendar } from "./CalendarProvider";
+import { useForecast } from "./ForecastProvider";
 import { apiUrl } from "@/lib/basePath";
-
-interface CalendarSectionProps {
-  bestDay: DailyForecast | null;
-}
 
 /** Vorbelegung des Formulars: bestes Zeitfenster des empfohlenen Tages. */
 function defaultTimes(bestDay: DailyForecast | null) {
@@ -23,8 +20,11 @@ function defaultTimes(bestDay: DailyForecast | null) {
   };
 }
 
-export default function CalendarSection({ bestDay }: CalendarSectionProps) {
+export default function CalendarSection() {
   const { configured, canWrite, loading, events, message, reload } = useCalendar();
+  // Folgt dem Regler: Ändert sich die Segelzeit, ändert sich auch der
+  // vorgeschlagene Termin.
+  const { bestDay } = useForecast();
 
   const [formOpen, setFormOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);

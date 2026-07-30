@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect } from "react";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  MapContainer,
+  Marker,
+  Popup,
+  TileLayer,
+  useMap,
+  useMapEvents,
+} from "react-leaflet";
+import L from "leaflet";
 import { AMMERSEE_LOCATION } from "@/lib/locations";
 import { degToCardinal, formatKnots } from "@/lib/format";
-import WindParticles from "./WindParticles";
+import { apiUrl } from "@/lib/basePath";
+import type { Waypoint } from "@/lib/types";
+import WindParticles, { type MapAnchor } from "./WindParticles";
 import { useTheme } from "./ThemeProvider";
 import "leaflet/dist/leaflet.css";
 
@@ -49,6 +59,217 @@ function TouchPanGuard() {
   return null;
 }
 
+/**
+ * Die Strömung liegt über der Karte und muss deren Bewegung mitmachen —
+ * sonst bleiben die Striche beim Verschieben im Bildschirm stehen und die
+ * Karte rutscht darunter weg.
+ *
+ * Dafür wird ein fester Punkt der Karte beobachtet: Wandert er auf dem
+ * Bildschirm, wandern die Partikel im selben Mass mit.
+ */
+function WindOverlay({
+  windDirectionDeg,
+  windSpeedKmh,
+  gustKmh,
+  streakColor,
+}: SailingMapProps & { streakColor: string }) {
+  const map = useMap();
+  const anchorRef = useRef<L.LatLng | null>(null);
+
+  const getAnchor = useCallback((): MapAnchor | null => {
+    // Beim ersten Aufruf festlegen — das geschieht im Animationsbild, nicht
+    // während des Renderns.
+    anchorRef.current ??= map.getCenter();
+    const point = map.latLngToContainerPoint(anchorRef.current);
+    return { x: point.x, y: point.y, zoom: map.getZoom() };
+  }, [map]);
+
+  return (
+    <div
+      className="pointer-events-none absolute inset-0"
+      // Über den Kacheln (200), aber unter Markern (600), damit Wegpunkte
+      // anklickbar bleiben.
+      style={{ zIndex: 450 }}
+    >
+      <WindParticles
+        directionDeg={windDirectionDeg}
+        windSpeedKmh={windSpeedKmh}
+        gustKmh={gustKmh}
+        streakColor={streakColor}
+        getAnchor={getAnchor}
+      />
+    </div>
+  );
+}
+
+const waypointIcon = L.divIcon({
+  className: "",
+  html: `<div style="
+    width:12px;height:12px;border-radius:9999px;
+    background:#f59e0b;border:2px solid #78350f;
+    box-shadow:0 0 0 3px rgba(245,158,11,.3);
+  "></div>`,
+  iconSize: [12, 12],
+  iconAnchor: [6, 6],
+});
+
+/** Gemeinsame Wegpunkte: von allen anlegbar und von allen löschbar. */
+function WaypointLayer() {
+  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const [pending, setPending] = useState<L.LatLng | null>(null);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(apiUrl("/api/waypoints"));
+      const data = await res.json();
+      setWaypoints(Array.isArray(data.waypoints) ? data.waypoints : []);
+    } catch {
+      // Ohne Wegpunkte bleibt die Karte benutzbar — kein Grund zu lärmen.
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initialer Abruf beim Mounten
+    void load();
+  }, [load]);
+
+  useMapEvents({
+    click(event) {
+      setPending(event.latlng);
+      setName("");
+      setError(null);
+    },
+  });
+
+  async function create() {
+    if (!pending || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(apiUrl("/api/waypoints"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, lat: pending.lat, lon: pending.lng }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Speichern fehlgeschlagen.");
+      setWaypoints((current) => [...current, data.waypoint]);
+      setPending(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unbekannter Fehler.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    try {
+      const res = await fetch(apiUrl(`/api/waypoints/${id}`), { method: "DELETE" });
+      if (res.ok || res.status === 404) {
+        setWaypoints((current) => current.filter((w) => w.id !== id));
+      }
+    } catch {
+      // Beim nächsten Laden ist der Stand wieder richtig.
+    }
+  }
+
+  return (
+    <>
+      {waypoints.map((waypoint) => (
+        <Marker
+          key={waypoint.id}
+          position={[waypoint.lat, waypoint.lon]}
+          icon={waypointIcon}
+        >
+          <Popup>
+            <strong>{waypoint.name}</strong>
+            <br />
+            <span style={{ opacity: 0.7 }}>
+              {waypoint.lat.toFixed(4)}, {waypoint.lon.toFixed(4)}
+            </span>
+            <br />
+            <button
+              type="button"
+              onClick={() => remove(waypoint.id)}
+              style={{
+                marginTop: 6,
+                border: 0,
+                borderRadius: 6,
+                padding: "4px 10px",
+                background: "#e11d48",
+                color: "#fff",
+                cursor: "pointer",
+                font: "inherit",
+                fontSize: 12,
+              }}
+            >
+              Löschen
+            </button>
+          </Popup>
+        </Marker>
+      ))}
+
+      {pending && (
+        <Popup
+          position={pending}
+          eventHandlers={{ remove: () => setPending(null) }}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void create();
+            }}
+          >
+            <label style={{ fontSize: 12, display: "block", marginBottom: 4 }}>
+              Neuer Wegpunkt
+            </label>
+            <input
+              autoFocus
+              value={name}
+              maxLength={60}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="z. B. Bojenfeld Nord"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "4px 6px",
+                font: "inherit",
+                fontSize: 12,
+              }}
+            />
+            {error && (
+              <p style={{ color: "#e11d48", fontSize: 11, margin: "4px 0 0" }}>
+                {error}
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={busy || !name.trim()}
+              style={{
+                marginTop: 6,
+                border: 0,
+                borderRadius: 6,
+                padding: "4px 10px",
+                background: "#0284c7",
+                color: "#fff",
+                cursor: "pointer",
+                font: "inherit",
+                fontSize: 12,
+                opacity: busy || !name.trim() ? 0.5 : 1,
+              }}
+            >
+              {busy ? "Speichern…" : "Anlegen"}
+            </button>
+          </form>
+        </Popup>
+      )}
+    </>
+  );
+}
+
 export default function SailingMap({
   windDirectionDeg,
   windSpeedKmh,
@@ -72,18 +293,14 @@ export default function SailingMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <TouchPanGuard />
-        </MapContainer>
-
-        {/* Strömungsanimation über der Karte. pointer-events:none, damit Zoom
-            und Verschieben der Karte unverändert funktionieren. */}
-        <div className="pointer-events-none absolute inset-0 z-[400]">
-          <WindParticles
-            directionDeg={windDirectionDeg}
+          <WaypointLayer />
+          <WindOverlay
+            windDirectionDeg={windDirectionDeg}
             windSpeedKmh={windSpeedKmh}
             gustKmh={gustKmh}
             streakColor={streakColor}
           />
-        </div>
+        </MapContainer>
 
         {/* Rechts oben, damit die Leaflet-Zoombuttons links oben frei bleiben. */}
         <div className="pointer-events-none absolute right-3 top-3 z-[401] rounded-xl border border-line bg-surface-strong px-3 py-2 backdrop-blur sm:right-4 sm:top-4 sm:px-4 sm:py-3">
@@ -100,8 +317,9 @@ export default function SailingMap({
         </div>
       </div>
 
-      <p className="text-center text-[11px] text-ink-soft sm:hidden">
-        Karte mit zwei Fingern verschieben und zoomen
+      <p className="text-center text-[11px] text-ink-soft">
+        Auf die Karte tippen, um einen Wegpunkt anzulegen — sichtbar für alle.
+        <span className="sm:hidden"> Verschieben und zoomen mit zwei Fingern.</span>
       </p>
     </div>
   );

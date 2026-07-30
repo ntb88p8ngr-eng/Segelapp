@@ -183,6 +183,29 @@ Für ein deutlich kleineres Image lässt sich in `next.config.ts`
 `output: "standalone"` setzen; dann genügt es, `.next/standalone`,
 `.next/static` und `public` zu kopieren und mit `node server.js` zu starten.
 
+## Wegpunkte
+
+Die gemeinsamen Kartenpunkte liegen in einer JSON-Datei. Vorgabe ist
+`.data/waypoints.json` im Projektverzeichnis — auf einem Server besser an
+einen Ort ausserhalb des Deployments legen, damit sie ein Update überstehen:
+
+```
+WAYPOINTS_FILE=/var/lib/segelapp/waypoints.json
+```
+
+Bei der systemd-Einheit muss das Verzeichnis beschreibbar sein:
+`ReadWritePaths=/var/lib/segelapp` ergänzen.
+
+Zwei Punkte zum Abwägen:
+
+- **Kein dauerhaftes Dateisystem, keine Wegpunkte.** Auf serverlosen
+  Plattformen (Vercel & Co.) ist das Dateisystem flüchtig; die Punkte wären
+  beim nächsten Kaltstart weg. Dort braucht es stattdessen eine Datenbank.
+- **Ohne Anmeldung darf jede Person schreiben und löschen** — so gewünscht.
+  Als Bremse sind höchstens 200 Punkte, 60 Zeichen je Name und ein
+  Koordinatenrahmen um den Ammersee gesetzt. Wer die Seite öffentlich stellt,
+  sollte wissen, dass Wegpunkte damit auch von Fremden entfernt werden können.
+
 ## Unter einem Unterpfad ausliefern
 
 Läuft die Seite nicht auf einer eigenen (Sub-)Domain, sondern als Unterseite —

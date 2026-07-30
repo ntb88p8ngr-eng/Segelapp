@@ -28,7 +28,19 @@ export interface SevereWeatherRisk {
   reason: string;
 }
 
-/** Das windmäßig beste zusammenhängende Zeitfenster eines Tages. */
+/** Grobe Einstufung der Bewölkung. */
+export type SkyCover = "sonnig" | "wechselnd" | "bedeckt";
+
+/**
+ * Die Zeitspanne, in der überhaupt gesegelt wird. Über den Regler auf der
+ * Seite einstellbar; Ende ausschliesslich (9/20 heisst 9 bis 20 Uhr).
+ */
+export interface SailingWindow {
+  startHour: number;
+  endHour: number;
+}
+
+/** Ein zusammenhängendes Zeitfenster eines Tages. */
 export interface BestWindow {
   /** Lokale Stunden, Ende exklusiv: 13/16 bedeutet 13–16 Uhr. */
   startHour: number;
@@ -36,6 +48,9 @@ export interface BestWindow {
   windSpeedAvgKmh: number;
   windGustMaxKmh: number;
   windDirectionDeg: number;
+  /** Mittlere Temperatur im Fenster. */
+  temperatureC: number | null;
+  skyCover: SkyCover | null;
   score: number;
 }
 
@@ -46,13 +61,27 @@ export interface DailyForecast {
   windGustMaxKmh: number;
   windDirectionDeg: number;
   temperatureMaxC: number;
+  /** Mittlere Temperatur über die gewählte Segelzeit. */
+  temperatureAvgC: number | null;
+  skyCover: SkyCover | null;
   precipitationSumMm: number;
   condition: string | null;
   score: number;
   rating: SailingRating;
   bestWindow: BestWindow | null;
+  /** Kühlere Ausweichzeit, wenn das beste Fenster zu heiss wird. */
+  coolerWindow: BestWindow | null;
   severeRisk: SevereWeatherRisk | null;
   hourly: WindObservation[];
+}
+
+/** Ein gemeinsam gepflegter Punkt auf der Karte. */
+export interface Waypoint {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  createdAt: string;
 }
 
 /**

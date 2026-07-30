@@ -19,6 +19,19 @@ und ein Vereinskalender mit Schreibzugriff auf einen iCloud-Kalender.
   Segelstunden geschoben; das bestbewertete Fenster steht auf jeder Tageskarte
   und belegt das Kalenderformular vor. An zu windigen Tagen wird das ruhigste
   Fenster empfohlen und entsprechend als "Ruhigste Zeit" ausgewiesen.
+- **Einstellbare Segelzeit**: Ein Regler begrenzt die Spanne, die bewertet
+  wird. Die Neuberechnung passiert im Browser, ohne erneuten Abruf; die
+  Auswahl wird gespeichert.
+- **Temperatur und Sonne** je Tag: Mittel über die Segelzeit, Tageshöchstwert
+  und die Temperatur im empfohlenen Fenster; ein Symbol zeigt sonnig,
+  wechselnd oder bedeckt.
+- **Kühlere Ausweichzeit**: Wird im empfohlenen Fenster mehr als 28 °C
+  erreicht, sucht die Seite das kühlste Fenster, das seglerisch noch taugt —
+  Hitze soll nicht gegen Flaute getauscht werden.
+- **Gemeinsame Wegpunkte**: Auf die Karte tippen legt einen Punkt an, den alle
+  sehen und alle wieder löschen können.
+- **Aktualisieren-Knopf**, der den Zwischenspeicher gezielt verwirft; während
+  des Ladens fährt ein Boot eine Runde.
 - **Warnungen** für Gewitter und starke Böen — aktuell (rot) und für die
   kommenden Tage (gelb). Schwellen orientieren sich an Beaufort: ab 39 km/h
   Böen ein Hinweis, ab 62 km/h (Sturmböen) eine Warnung.
@@ -128,13 +141,22 @@ src/
     page.tsx                  Hauptseite (Server Component, lädt Wetterdaten)
     layout.tsx                Theme-Init ohne Flackern
     api/weather/route.ts      Proxy zu Bright Sky + Scoring
-    api/calendar/route.ts     CalDAV GET (lesen) / POST (Termin anlegen)
+    api/calendar/route.ts     Kalender lesen / Termin anlegen
+    api/waypoints/route.ts    Wegpunkte lesen und anlegen
+    actions.ts                Server Action zum Verwerfen des Wettercaches
   lib/
-    weather.ts                Bright-Sky-Anbindung, Scoring, Zeitfenster, Warnungen
+    weather.ts                Bright-Sky-Anbindung, Warnungen, Stationsangabe
+    scoring.ts                Reine Bewertung — von Server und Browser genutzt
     caldav.ts                 iCloud-CalDAV-Client (tsdav)
+    publicCalendar.ts         Öffentlicher iCloud-Feed (nur lesen)
+    ics.ts                    Termine lesen, Serien auflösen
+    waypoints.ts              Ablage der gemeinsamen Kartenpunkte
     demoWeather.ts            Demo-Fixture für die Entwicklung
     locations.ts              Ammersee-Koordinaten
   components/
+    ForecastProvider.tsx      Segelzeit + Neuberechnung im Browser
+    SailingWindowSlider.tsx   Regler für die Segelzeit
+    RefreshButton.tsx         Daten neu laden, Boot fährt eine Runde
     ThemeProvider.tsx         data-theme als externer Store
     ThemeToggle.tsx           Segelboot-/Piratenschiff-Umschalter
     WeatherAlerts.tsx         Gewitter- und Böen-Warnungen

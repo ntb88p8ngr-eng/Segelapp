@@ -84,6 +84,87 @@ body {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
+/* Das Boot fährt eine Runde: Es kreist um die Mitte und dreht dabei mit,
+   wie ein Boot, das tatsächlich einen Kreis segelt. */
+@keyframes boat-orbit {
+  from {
+    transform: rotate(0deg) translateX(0.3rem) rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg) translateX(0.3rem) rotate(360deg);
+  }
+}
+
+.boat-orbit {
+  animation: boat-orbit 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boat-orbit {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* Zwei Regler liegen übereinander. Damit der untere erreichbar bleibt, ist
+   die Schiene durchlässig und nur der Griff nimmt Zeigereingaben an. */
+.range-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  height: 2.5rem;
+  margin: 0;
+}
+
+.range-thumb:focus {
+  outline: none;
+}
+
+.range-thumb::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 2.5rem;
+}
+
+.range-thumb::-moz-range-track {
+  background: transparent;
+  height: 2.5rem;
+}
+
+.range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+}
+
+.range-thumb::-moz-range-thumb {
+  pointer-events: auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: grab;
+}
+
+.range-thumb:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.range-thumb:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .leaflet-container {
   background: var(--surface-inset) !important;
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;

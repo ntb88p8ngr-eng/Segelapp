@@ -1,16 +1,23 @@
 import { AMMERSEE_LOCATION } from "./locations";
 import { demoCurrentWeather, demoForecast, isDemoMode } from "./demoWeather";
 import { formatKnots, formatShortDate, formatWeekday } from "./format";
+import {
+  DEFAULT_SAILING_WINDOW,
+  GUST_STORM_KMH,
+  GUST_STRONG_KMH,
+  summariseDay,
+} from "./scoring";
 import type {
-  BestWindow,
   DailyForecast,
-  SailingRating,
-  SevereWeatherRisk,
+  SailingWindow,
   WeatherAlert,
   WeatherResponse,
   WeatherStation,
   WindObservation,
 } from "./types";
+
+/** Kennzeichnung des Wetterabrufs, damit er gezielt erneuert werden kann. */
+export const WEATHER_CACHE_TAG = "weather";
 
 /**
  * Adresse der Bright-Sky-Instanz. Überschreibbar, damit eine selbst
@@ -119,7 +126,9 @@ async function fetchJson(url: string) {
   if (isDemoMode()) {
     return url.includes("current_weather") ? demoCurrentWeather() : demoForecast();
   }
-  const res = await fetch(url, { next: { revalidate: 600 } });
+  const res = await fetch(url, {
+    next: { revalidate: 600, tags: [WEATHER_CACHE_TAG] },
+  });
   if (!res.ok) {
     throw new Error(`Bright Sky Anfrage fehlgeschlagen (${res.status})`);
   }
@@ -175,226 +184,64 @@ function nearestObservation(
   return best;
 }
 
+function ageMinutes(observation: WindObservation): number {
+  return Math.abs(Date.now() - new Date(observation.timestamp).getTime()) / 60000;
+}
+
+/**
+ * Ab diesem Vorsprung wird die Stundenreihe der Direktmeldung vorgezogen.
+ *
+ * Eine echte Stationsmeldung ist einer modellierten Stunde grundsätzlich
+ * überlegen, deshalb nicht schon bei wenigen Minuten wechseln. Meldet die
+ * Station aber seit zwei Stunden nichts Neues, ist der Wert für "aktuell"
+ * unbrauchbar — dann zählt Aktualität mehr als Herkunft.
+ */
+const STALE_REPORT_MINUTES = 90;
+
+/**
+ * Wählt zwischen der Direktmeldung der Station und der zeitlich nächsten
+ * Stunde aus der Vorhersagereihe.
+ */
+function pickCurrent(
+  reported: WindObservation | null,
+  forecast: DailyForecast[],
+): WindObservation | null {
+  const nearest = nearestObservation(forecast.flatMap((day) => day.hourly));
+
+  // Ohne Wind ist die Direktmeldung für das Dashboard wertlos.
+  if (!reported || reported.windSpeedKmh == null) {
+    if (!nearest) return reported;
+    return {
+      ...nearest,
+      // Temperatur und Zustand der Direktmeldung sind aktueller, falls da.
+      temperatureC: reported?.temperatureC ?? nearest.temperatureC,
+      condition: reported?.condition ?? nearest.condition,
+    };
+  }
+
+  if (!nearest) return reported;
+
+  const reportedAge = ageMinutes(reported);
+  const nearestAge = ageMinutes(nearest);
+  if (reportedAge - nearestAge > STALE_REPORT_MINUTES) {
+    return {
+      ...nearest,
+      temperatureC: reported.temperatureC ?? nearest.temperatureC,
+      condition: reported.condition ?? nearest.condition,
+    };
+  }
+
+  return reported;
+}
+
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Böen-Schwellen nach Beaufort (km/h): ab Bft 6 wird es für kleinere Boote
-// unangenehm, ab Bft 8 (Sturmböen) sollte nicht mehr ausgelaufen werden.
-// Dieselben Schwellen speisen Bewertung und Warnhinweise.
-const GUST_STRONG_KMH = 39;
-const GUST_STORM_KMH = 62;
-
-/**
- * Bewertungskurve für die mittlere Windgeschwindigkeit: km/h -> 0..100.
- *
- * Bewusst mit einem einzelnen Hochpunkt bei rund 20 km/h (etwa 11 kn) statt
- * mit einem breiten Plateau. Ein Plateau würde jeden Tag im "guten" Band
- * gleich bewerten — ein Tag mit 12 km/h käme dann auf denselben Score wie
- * einer mit 20 km/h, und bei Gleichstand gewinnt einfach der frühere Tag.
- */
-const WIND_SCORE_CURVE: ReadonlyArray<readonly [number, number]> = [
-  [0, 0],
-  [4, 8],
-  [7, 25],
-  [9, 40],
-  [12, 62],
-  [15, 80],
-  [17, 91],
-  [20, 100],
-  [24, 94],
-  [28, 84],
-  [32, 72],
-  [38, 52],
-  [45, 28],
-  [55, 8],
-  [70, 0],
-];
-
-/** Lineare Interpolation zwischen den Stützstellen der Kurve. */
-function windScore(avgKmh: number): number {
-  const first = WIND_SCORE_CURVE[0];
-  const last = WIND_SCORE_CURVE[WIND_SCORE_CURVE.length - 1];
-  if (avgKmh <= first[0]) return first[1];
-  if (avgKmh >= last[0]) return last[1];
-
-  for (let i = 1; i < WIND_SCORE_CURVE.length; i++) {
-    const [x1, y1] = WIND_SCORE_CURVE[i];
-    if (avgKmh <= x1) {
-      const [x0, y0] = WIND_SCORE_CURVE[i - 1];
-      return y0 + ((avgKmh - x0) / (x1 - x0)) * (y1 - y0);
-    }
-  }
-  return last[1];
-}
-
-/**
- * Segeltauglichkeit (0-100) für eine Reihe stündlicher Beobachtungen.
- * Grundlage ist die Windkurve oben; Böigkeit, Niederschlag und Gewitter
- * ziehen davon ab.
- */
-function scoreDay(hours: WindObservation[]): {
-  /** Anzeigewert, auf 0..100 begrenzt und gerundet. */
-  score: number;
-  /**
-   * Ungekappter, ungerundeter Wert. Nur zum Vergleichen: An Tagen, die
-   * ohnehin unsegelbar sind, laufen alle Anzeigewerte auf 0 zusammen — der
-   * Rohwert unterscheidet dort weiter zwischen "kräftig zu viel" und
-   * "unmöglich" und lässt so das ruhigste Fenster gewinnen.
-   */
-  rawScore: number;
-  rating: SailingRating;
-} {
-  const speeds = hours
-    .map((h) => h.windSpeedKmh)
-    .filter((v): v is number => v != null);
-  const gusts = hours
-    .map((h) => h.windGustKmh)
-    .filter((v): v is number => v != null);
-  const precip = hours.reduce((sum, h) => sum + (h.precipitationMm ?? 0), 0);
-  const hasThunderstorm = hours.some((h) => h.condition === "thunderstorm");
-
-  if (speeds.length === 0) {
-    return {
-      score: 0,
-      rawScore: Number.NEGATIVE_INFINITY,
-      rating: "schlecht",
-    };
-  }
-
-  const avg = speeds.reduce((a, b) => a + b, 0) / speeds.length;
-  const gustMax = gusts.length ? Math.max(...gusts) : avg;
-
-  let raw = windScore(avg);
-
-  // Böigkeit: gleitender Abzug statt Stufe, damit unruhige Tage auch
-  // untereinander unterscheidbar bleiben. Normale Spreizungen bis 15 km/h
-  // gelten als unauffällig.
-  const gustSpread = Math.max(0, gustMax - avg);
-  if (gustSpread > 15) raw -= Math.min((gustSpread - 15) * 0.8, 20);
-  if (gustMax >= GUST_STORM_KMH) raw -= 25;
-
-  raw -= Math.min(precip * 4, 30);
-
-  // Gewitter ist ein Ausschlusskriterium, kein Abzug: deutlich unter jeden
-  // windbedingten Malus, damit gewitterfreie Fenster immer vorgezogen werden.
-  if (hasThunderstorm) raw = -1000;
-
-  const score = Math.max(0, Math.min(100, Math.round(raw)));
-
-  let rating: SailingRating;
-  if (hasThunderstorm) rating = "schlecht";
-  else if (avg < 7) rating = "wenig_wind";
-  else if (avg > 40 || gustMax > 65) rating = "zu_stark";
-  else if (score >= 80) rating = "top";
-  else if (score >= 60) rating = "gut";
-  else if (score >= 40) rating = "maessig";
-  else rating = "schlecht";
-
-  return { score, rawScore: raw, rating };
-}
-
-/**
- * Prüft den ganzen Tag (nicht nur das Segelfenster) auf Unwetterlagen.
- * Gewitter und Sturmböen sind für die Planung auch dann relevant, wenn sie
- * ausserhalb der üblichen Segelstunden auftreten.
- */
-function buildSevereRisk(
-  hours: WindObservation[],
-  dayGustMaxKmh: number,
-): SevereWeatherRisk | null {
-  const hasThunderstorm = hours.some((h) => h.condition === "thunderstorm");
-  const hasStormGusts = dayGustMaxKmh >= GUST_STORM_KMH;
-  if (!hasThunderstorm && !hasStormGusts) return null;
-
-  const parts: string[] = [];
-  if (hasThunderstorm) parts.push("Gewitter");
-  if (hasStormGusts) parts.push(`Sturmböen bis ${formatKnots(dayGustMaxKmh)}`);
-
-  return { hasThunderstorm, hasStormGusts, reason: parts.join(" · ") };
-}
-
-/** Länge des empfohlenen Zeitfensters in Stunden. */
-const WINDOW_HOURS = 3;
-
-/**
- * Sucht das beste zusammenhängende Zeitfenster eines Tages, indem ein
- * gleitendes Fenster über die Segelstunden geschoben und mit derselben
- * Bewertung wie der Gesamttag gescort wird.
- *
- * Verglichen wird über den ungekappten Rohwert. An zu windigen Tagen fallen
- * sonst alle Fenster auf 0 und das früheste gewönne willkürlich; über den
- * Rohwert setzt sich dort das ruhigste Fenster durch — genau das, was an
- * einem Starkwindtag gesucht ist.
- */
-function findBestWindow(hours: WindObservation[]): BestWindow | null {
-  const usable = hours
-    .map((h) => ({ obs: h, hour: new Date(h.timestamp).getHours() }))
-    .filter((entry) => entry.obs.windSpeedKmh != null)
-    .sort((a, b) => a.hour - b.hour);
-
-  if (usable.length < WINDOW_HOURS) return null;
-
-  let best: BestWindow | null = null;
-  let bestRaw = Number.NEGATIVE_INFINITY;
-  let bestGustMax = Number.POSITIVE_INFINITY;
-
-  for (let i = 0; i + WINDOW_HOURS <= usable.length; i++) {
-    const slice = usable.slice(i, i + WINDOW_HOURS);
-
-    // Nur echte Blöcke aufeinanderfolgender Stunden bewerten.
-    const contiguous = slice.every(
-      (entry, idx) => idx === 0 || entry.hour === slice[idx - 1].hour + 1,
-    );
-    if (!contiguous) continue;
-
-    const observations = slice.map((entry) => entry.obs);
-    const { score, rawScore } = scoreDay(observations);
-
-    const speeds = observations
-      .map((o) => o.windSpeedKmh)
-      .filter((v): v is number => v != null);
-    const gusts = observations
-      .map((o) => o.windGustKmh)
-      .filter((v): v is number => v != null);
-    const gustMax = gusts.length ? Math.max(...gusts) : 0;
-
-    if (best) {
-      if (rawScore < bestRaw) continue;
-      // Bei echtem Gleichstand entscheidet die ruhigere Böenspitze.
-      if (rawScore === bestRaw && gustMax >= bestGustMax) continue;
-    }
-
-    bestRaw = rawScore;
-    bestGustMax = gustMax;
-    best = {
-      startHour: slice[0].hour,
-      endHour: slice[slice.length - 1].hour + 1,
-      windSpeedAvgKmh:
-        Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) / 10,
-      windGustMaxKmh: Math.round(gustMax * 10) / 10,
-      windDirectionDeg: Math.round(dominantDirection(observations)),
-      score,
-    };
-  }
-
-  return best;
-}
-
-function dominantDirection(hours: WindObservation[]): number {
-  const dirs = hours
-    .map((h) => h.windDirectionDeg)
-    .filter((v): v is number => v != null);
-  if (!dirs.length) return 0;
-  // average via vector sum so 350deg and 10deg average to 0deg, not 180deg
-  const rad = dirs.map((d) => (d * Math.PI) / 180);
-  const sinSum = rad.reduce((s, r) => s + Math.sin(r), 0);
-  const cosSum = rad.reduce((s, r) => s + Math.cos(r), 0);
-  const angle = (Math.atan2(sinSum, cosSum) * 180) / Math.PI;
-  return (angle + 360) % 360;
-}
-
-export async function fetchForecast(days = 6): Promise<DailyForecast[]> {
+export async function fetchForecast(
+  days = 6,
+  window: SailingWindow = DEFAULT_SAILING_WINDOW,
+): Promise<DailyForecast[]> {
   const today = new Date();
   const lastDay = new Date(today);
   lastDay.setDate(lastDay.getDate() + days);
@@ -402,68 +249,23 @@ export async function fetchForecast(days = 6): Promise<DailyForecast[]> {
   const url = `${BRIGHTSKY_BASE}/weather?lat=${AMMERSEE_LOCATION.lat}&lon=${AMMERSEE_LOCATION.lon}&date=${isoDate(today)}&last_date=${isoDate(lastDay)}&units=dwd`;
   const data = await fetchJson(url);
   const records: BrightSkyRecord[] = data?.weather ?? [];
-  const observations = records.map(toObservation);
 
   const byDay = new Map<string, WindObservation[]>();
-  for (const obs of observations) {
+  for (const record of records) {
+    const obs = toObservation(record);
     const day = obs.timestamp.slice(0, 10);
-    if (!byDay.has(day)) byDay.set(day, []);
-    byDay.get(day)!.push(obs);
+    const bucket = byDay.get(day);
+    if (bucket) bucket.push(obs);
+    else byDay.set(day, [obs]);
   }
 
-  const now = new Date();
+  const todayKey = new Date().toISOString().slice(0, 10);
   const result: DailyForecast[] = [];
 
   for (const [day, hours] of byDay) {
-    // Focus the score on the typical sailing window (9:00-19:00 local).
-    const sailingHours = hours.filter((h) => {
-      const hour = new Date(h.timestamp).getHours();
-      return hour >= 9 && hour <= 19;
-    });
-    const relevantHours = sailingHours.length ? sailingHours : hours;
-
-    const speeds = relevantHours
-      .map((h) => h.windSpeedKmh)
-      .filter((v): v is number => v != null);
-    const gusts = relevantHours
-      .map((h) => h.windGustKmh)
-      .filter((v): v is number => v != null);
-    const temps = hours
-      .map((h) => h.temperatureC)
-      .filter((v): v is number => v != null);
-    const precipSum = hours.reduce((s, h) => s + (h.precipitationMm ?? 0), 0);
-    const { score, rating } = scoreDay(relevantHours);
-
-    // Für die Gefahreneinschätzung zählt der gesamte Tag, nicht nur das
-    // Segelfenster.
-    const allGusts = hours
-      .map((h) => h.windGustKmh)
-      .filter((v): v is number => v != null);
-    const dayGustMax = allGusts.length ? Math.max(...allGusts) : 0;
-
-    if (!speeds.length) continue;
-    if (new Date(day) < new Date(now.toISOString().slice(0, 10))) continue;
-
-    result.push({
-      date: day,
-      windSpeedAvgKmh:
-        Math.round((speeds.reduce((a, b) => a + b, 0) / speeds.length) * 10) /
-        10,
-      windSpeedMaxKmh: Math.round(Math.max(...speeds) * 10) / 10,
-      windGustMaxKmh: gusts.length
-        ? Math.round(Math.max(...gusts) * 10) / 10
-        : 0,
-      windDirectionDeg: Math.round(dominantDirection(relevantHours)),
-      temperatureMaxC: temps.length ? Math.round(Math.max(...temps)) : 0,
-      precipitationSumMm: Math.round(precipSum * 10) / 10,
-      condition:
-        relevantHours.find((h) => h.condition)?.condition ?? hours[0]?.condition ?? null,
-      score,
-      rating,
-      bestWindow: findBestWindow(relevantHours),
-      severeRisk: buildSevereRisk(hours, dayGustMax),
-      hourly: hours,
-    });
+    if (day < todayKey) continue;
+    const summary = summariseDay(day, hours, window);
+    if (summary) result.push(summary);
   }
 
   result.sort((a, b) => a.date.localeCompare(b.date));
@@ -535,28 +337,15 @@ function buildAlerts(
   return alerts;
 }
 
-export async function getWeatherOverview(): Promise<WeatherResponse> {
+export async function getWeatherOverview(
+  window: SailingWindow = DEFAULT_SAILING_WINDOW,
+): Promise<WeatherResponse> {
   const [currentResult, forecast] = await Promise.all([
     fetchCurrentWeather().catch(() => ({ observation: null, station: null })),
-    fetchForecast(6).catch(() => []),
+    fetchForecast(6, window).catch(() => []),
   ]);
 
-  const reported = currentResult.observation;
-
-  // Nicht jede Station meldet durchgehend Wind. Fehlt er, ist die zeitlich
-  // nächste Stundenmessung besser als ein leeres Dashboard.
-  let current = reported;
-  if (!current || current.windSpeedKmh == null) {
-    const fallback = nearestObservation(forecast.flatMap((day) => day.hourly));
-    if (fallback) {
-      current = {
-        ...fallback,
-        // Temperatur und Zustand der Direktmeldung sind aktueller, falls da.
-        temperatureC: reported?.temperatureC ?? fallback.temperatureC,
-        condition: reported?.condition ?? fallback.condition,
-      };
-    }
-  }
+  const current = pickCurrent(currentResult.observation, forecast);
 
   let bestDayIndex: number | null = null;
   if (forecast.length) {

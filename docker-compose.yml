@@ -3,9 +3,14 @@ services:
     build:
       context: .
       args:
-        # Nur setzen, wenn die Seite unter einem Unterpfad läuft,
-        # z. B. "/segelapp". Muss beim Bauen bekannt sein.
-        NEXT_PUBLIC_BASE_PATH: ""
+        # Nur nötig, wenn die Seite unter einem Unterpfad läuft, z. B.
+        # "/segelapp". Das Präfix muss beim Bauen bekannt sein.
+        #
+        # Der Wert steht bewusst nicht hier, sondern kommt aus der Umgebung —
+        # sonst wäre er bei jedem "git pull" wieder überschrieben. Dauerhaft
+        # eintragen in die Datei ".env" neben dieser Datei:
+        #   NEXT_PUBLIC_BASE_PATH=/segelapp
+        NEXT_PUBLIC_BASE_PATH: "${NEXT_PUBLIC_BASE_PATH:-}"
         # Zeigt das Commit-Kürzel in der Fusszeile. Aufruf dann:
         #   NEXT_PUBLIC_COMMIT=$(git rev-parse --short HEAD) docker compose up -d --build
         NEXT_PUBLIC_COMMIT: "${NEXT_PUBLIC_COMMIT:-}"

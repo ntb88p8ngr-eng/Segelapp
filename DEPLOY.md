@@ -198,14 +198,31 @@ docker compose cp segelapp:/data/waypoints.json ./waypoints-backup.json
 ### Unterpfad
 
 Das Präfix muss beim **Bauen** bekannt sein und gehört deshalb in die
-Build-Argumente, nicht in `segelapp.env`:
+Build-Argumente, nicht in `segelapp.env`. Es gehört in die Datei `.env` neben
+dem `docker-compose.yml` — dort, und nicht im `docker-compose.yml` selbst,
+weil das `docker-compose.yml` nachverfolgt ist und beim nächsten `git pull`
+überschrieben würde. `.env` ist von git ausgenommen und bleibt liegen:
 
-```yaml
-build:
-  context: .
-  args:
-    NEXT_PUBLIC_BASE_PATH: "/segelapp"
+```bash
+echo 'NEXT_PUBLIC_BASE_PATH=/segelapp' > .env
+docker compose up -d --build
 ```
+
+Achtung, zwei verschiedene Dateien: `.env` liest **Docker Compose** beim
+Zusammenbauen der Datei (Bauzeit), `segelapp.env` bekommt der Container als
+Umgebung (Laufzeit). Die Zugangsdaten gehören in `segelapp.env`.
+
+Ob das Präfix im Image gelandet ist, lässt sich am Container selbst ablesen —
+mit Präfix bedient Next **nur** noch Adressen unterhalb davon:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/segelapp   # 200
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/           # 404
+```
+
+Sind die beiden Werte vertauscht, wurde ohne Präfix gebaut. Dann antwortet die
+Seite hinter dem Proxy auf jede Adresse unterhalb des Präfixes mit **404**:
+Next kennt das Präfix nicht und erwartet alles unter `/`.
 
 ### Warum eine eigene .dockerignore nötig ist
 
@@ -261,12 +278,27 @@ Zwei Punkte zum Abwägen:
 ## Unter einem Unterpfad ausliefern
 
 Läuft die Seite nicht auf einer eigenen (Sub-)Domain, sondern als Unterseite —
-etwa `https://verein.de/segelapp` — muss das Präfix beim **Bauen** bekannt
-sein:
+etwa `https://verein.de/segelapp` — braucht es das Präfix:
 
 ```
 NEXT_PUBLIC_BASE_PATH=/segelapp
 ```
+
+Wichtig: **beim Bauen und beim Starten.** Beim Bauen wird es fest in die
+erzeugten Seiten eingesetzt, beim Starten liest `next start` die
+`next.config.ts` erneut. Fehlt es beim Starten, bedient der Server alles unter
+`/`, während die Seiten ihre Dateien unter `/segelapp/...` suchen — hinter
+einem Proxy, der das Präfix durchreicht, antwortet jede Adresse mit 404.
+
+Bei systemd steht die Variable dafür in `/etc/segelapp.env` (der Dienst liest
+sie über `EnvironmentFile=`) **und** muss beim `npm run build` gesetzt sein:
+
+```bash
+NEXT_PUBLIC_BASE_PATH=/segelapp npm run build
+```
+
+Bei Docker erledigt das die `.env` neben dem `docker-compose.yml`; das
+Präfix landet über ein Build-Argument in beiden Stufen des Images.
 
 Der Reverse Proxy muss den Pfad dann **unverändert** durchreichen, nicht das
 Präfix abschneiden:

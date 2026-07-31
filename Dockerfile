@@ -13,7 +13,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Läuft die Seite unter einem Unterpfad, muss das Präfix schon beim Bauen
-# bekannt sein — nachträglich lässt es sich nicht mehr setzen.
+# bekannt sein: Es wird fest in die erzeugten HTML- und JS-Dateien eingesetzt.
 ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 
@@ -26,6 +26,14 @@ RUN npm run build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Das Präfix wird auch zur Laufzeit gebraucht, nicht nur beim Bauen: "next
+# start" liest next.config.ts erneut. Fehlt es hier, bedient der Server alles
+# unter "/", während die ausgelieferten Seiten ihre Dateien unter dem Präfix
+# suchen — die Seite käme ohne Gestaltung an, hinter einem Proxy, der das
+# Präfix durchreicht, käme sie als 404 gar nicht erst an.
+ARG NEXT_PUBLIC_BASE_PATH=""
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 
 # Wegpunkte in ein eigenes Verzeichnis, auf das ein Volume zeigt. Ohne das
 # lägen sie im Container und wären nach jedem Neubau verschwunden.

@@ -169,8 +169,15 @@ git pull
 docker compose up -d --build
 ```
 
-Ob der neue Stand läuft, zeigt ein Blick auf eine Route, die es erst seit
-Kurzem gibt:
+In der Fusszeile der Seite steht der Zeitpunkt des Builds ("Stand: …").
+Stimmt er nicht mit dem letzten Neubau überein, läuft noch das alte Image.
+Das Commit-Kürzel kommt dazu, wenn beim Bauen mitgegeben:
+
+```bash
+NEXT_PUBLIC_COMMIT=$(git rev-parse --short HEAD) docker compose up -d --build
+```
+
+Dasselbe zeigt eine Route, die es erst seit Kurzem gibt:
 
 ```bash
 curl http://127.0.0.1:3000/api/waypoints

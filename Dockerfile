@@ -17,6 +17,10 @@ COPY . .
 ARG NEXT_PUBLIC_BASE_PATH=""
 ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 
+# Commit-Kürzel für die Versionsanzeige in der Fusszeile (optional).
+ARG NEXT_PUBLIC_COMMIT=""
+ENV NEXT_PUBLIC_COMMIT=$NEXT_PUBLIC_COMMIT
+
 RUN npm run build
 
 FROM node:22-alpine AS runtime

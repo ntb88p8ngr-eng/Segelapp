@@ -7,6 +7,7 @@ import ForecastProvider from "@/components/ForecastProvider";
 import SailingWindowSlider from "@/components/SailingWindowSlider";
 import RefreshButton from "@/components/RefreshButton";
 import TodayWindChart from "@/components/TodayWindChart";
+import BuildStamp from "@/components/BuildStamp";
 import WeatherAlerts from "@/components/WeatherAlerts";
 import SailingMap from "@/components/SailingMapLoader";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -115,6 +116,8 @@ export default async function Home() {
               brightsky.dev
             </a>
             . Kartenmaterial: © OpenStreetMap-Mitwirkende.
+            <br />
+            <BuildStamp />
           </footer>
         </div>
       </ForecastProvider>

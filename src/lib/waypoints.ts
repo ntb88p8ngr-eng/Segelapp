@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Waypoint } from "./types";
 
@@ -10,9 +9,38 @@ import type { Waypoint } from "./types";
  * Einträge. Wichtig: Das setzt einen Server mit dauerhaftem Dateisystem
  * voraus. Auf serverlosen Plattformen (Vercel & Co.) ist das Dateisystem
  * flüchtig; dort gingen die Wegpunkte beim nächsten Kaltstart verloren.
+ *
+ * Der Vorgabepfad ist relativ notiert; Node löst ihn beim Zugriff gegen das
+ * Arbeitsverzeichnis auf.
  */
-const STORE_PATH =
-  process.env.WAYPOINTS_FILE || path.join(process.cwd(), ".data", "waypoints.json");
+const DEFAULT_STORE_PATH = ".data/waypoints.json";
+
+function storePath(): string {
+  return process.env.WAYPOINTS_FILE?.trim() || DEFAULT_STORE_PATH;
+}
+
+/**
+ * Der Dateizugriff wird erst zur Laufzeit geladen und dabei ausdrücklich von
+ * Turbopack ausgenommen.
+ *
+ * Grund: Der Ablageort steht erst zur Laufzeit fest (Umgebungsvariable). Sieht
+ * Turbopack beim Bauen ein `readFile` mit einem Pfad, den es nicht vorhersagen
+ * kann, nimmt es an, dieses Modul lese zur Bauzeit beliebige Dateien, und zieht
+ * vorsichtshalber das gesamte Projekt in die Ablaufverfolgung. Der Build meldet
+ * das als Warnung — und bricht unter Umständen mit einer irreführenden Meldung
+ * über ein angeblich fehlendes Modul ganz woanders ab.
+ *
+ * Die Magic Comments wirken nur auf `import()` und `require()`, nicht auf die
+ * Dateioperation selbst; deshalb dieser Umweg statt eines Kommentars am Aufruf.
+ */
+type FsPromises = typeof import("node:fs/promises");
+
+let fsPromise: Promise<FsPromises> | undefined;
+
+function fs(): Promise<FsPromises> {
+  fsPromise ??= import(/* turbopackIgnore: true */ "node:fs/promises");
+  return fsPromise;
+}
 
 /** Ohne Anmeldung darf jede Person schreiben — deshalb harte Obergrenzen. */
 export const MAX_WAYPOINTS = 200;
@@ -51,7 +79,8 @@ function isWaypoint(value: unknown): value is Waypoint {
 
 async function readAll(): Promise<Waypoint[]> {
   try {
-    const raw = await readFile(STORE_PATH, "utf8");
+    const { readFile } = await fs();
+    const raw = await readFile(storePath(), "utf8");
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter(isWaypoint) : [];
   } catch (error) {
@@ -63,12 +92,14 @@ async function readAll(): Promise<Waypoint[]> {
 }
 
 async function writeAll(waypoints: Waypoint[]): Promise<void> {
-  await mkdir(path.dirname(STORE_PATH), { recursive: true });
+  const { mkdir, rename, writeFile } = await fs();
+  const target = storePath();
+  await mkdir(path.dirname(target), { recursive: true });
   // Erst daneben schreiben, dann umbenennen: Ein Absturz mitten im Schreiben
   // hinterlässt so keine halbe Datei.
-  const tmp = `${STORE_PATH}.${process.pid}.tmp`;
+  const tmp = `${target}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(waypoints, null, 2), "utf8");
-  await rename(tmp, STORE_PATH);
+  await rename(tmp, target);
 }
 
 export async function listWaypoints(): Promise<Waypoint[]> {

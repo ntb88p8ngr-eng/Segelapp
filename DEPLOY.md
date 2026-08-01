@@ -301,7 +301,7 @@ Bei Docker erledigt das die `.env` neben dem `docker-compose.yml`; das
 Präfix landet über ein Build-Argument in beiden Stufen des Images.
 
 Der Reverse Proxy muss den Pfad dann **unverändert** durchreichen, nicht das
-Präfix abschneiden:
+Präfix abschneiden. Mit Caddy:
 
 ```
 verein.de {
@@ -314,7 +314,40 @@ verein.de {
 }
 ```
 
-Ohne die Variable verweist das ausgelieferte HTML auf `/_next/...` statt auf
+Mit Traefik als eigenem Docker-Container reicht `PathPrefix` — das schneidet
+den Pfad, anders als `StripPrefix`, ebenfalls nicht ab. Die Labels gehören auf
+den `segelapp`-Dienst in dessen `docker-compose.yml`, das Netzwerk muss dabei
+mit dem des Traefik-Containers übereinstimmen (im Traefik-eigenen
+`docker-compose.yml` unter `networks:` nachsehen, hier als `web` angenommen):
+
+```yaml
+services:
+  segelapp:
+    # ...
+    networks:
+      - default
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.services.segelapp.loadbalancer.server.port=3000"
+      - "traefik.http.routers.segelapp.rule=Host(`verein.de`) && PathPrefix(`/segelapp`)"
+      - "traefik.http.routers.segelapp.entrypoints=websecure"
+      - "traefik.http.routers.segelapp.tls.certresolver=leresolver"
+      # Höher als jeder Catch-all-Router ohne PathPrefix auf derselben
+      # Domain (z. B. für eine andere Anwendung) — sonst fängt der zuerst.
+      - "traefik.http.routers.segelapp.priority=10"
+
+networks:
+  web:
+    external: true
+```
+
+Läuft auf derselben Domain schon ein anderer Dienst mit einer reinen
+`Host(...)`-Regel ohne `PathPrefix`, fängt dessen Router sonst auch die
+Anfragen an `/segelapp` ab — daher die höhere Priorität.
+
+Ohne das Präfix verweist das ausgelieferte HTML auf `/_next/...` statt auf
 `/segelapp/_next/...`; die Seite käme dann ohne Gestaltung an.
 
 Auf einer eigenen (Sub-)Domain wird die Variable **nicht** gesetzt — dort

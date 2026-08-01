@@ -16,7 +16,8 @@ services:
         NEXT_PUBLIC_COMMIT: "${NEXT_PUBLIC_COMMIT:-}"
     restart: unless-stopped
 
-    # Nur lokal veröffentlichen — davor gehört ein Reverse Proxy mit TLS.
+    # Nur lokal veröffentlichen — der Zugriff von aussen läuft über Traefik
+    # (siehe die Labels unten), nicht über diesen Port.
     ports:
       - "127.0.0.1:3000:3000"
 
@@ -30,6 +31,34 @@ services:
       # Ohne dieses Volume wären die gemeinsamen Wegpunkte nach jedem
       # "docker compose up --build" verschwunden.
       - waypoints:/data
+
+    # Bindet den Dienst an den vorhandenen Traefik-Container. Ohne das
+    # externe Netzwerk "web" (aus dem Traefik-eigenen docker-compose.yml)
+    # kann Traefik diesen Container nicht erreichen.
+    networks:
+      - default
+      - web
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.services.segelapp.loadbalancer.server.port=3000"
+
+      # PathPrefix schneidet den Pfad NICHT ab — die Seite bekommt "/segelapp"
+      # weiterhin vollständig zu sehen, wie es NEXT_PUBLIC_BASE_PATH erwartet.
+      #
+      # Domain und Priorität an die eigene Umgebung anpassen: Ohne eine
+      # Priorität, die über der des Nextcloud-Routers liegt (dort explizit
+      # auf 1 gesetzt, ohne PathPrefix — der matcht sonst zuerst und fängt
+      # auch diese Anfragen ab), würde Nextcloud weiterhin alles beantworten.
+      - "traefik.http.routers.segelapp.rule=Host(`6idioten.ddns.net`) && PathPrefix(`/segelapp`)"
+      - "traefik.http.routers.segelapp.entrypoints=websecure"
+      - "traefik.http.routers.segelapp.tls.certresolver=leresolver"
+      - "traefik.http.routers.segelapp.priority=10"
+
+networks:
+  web:
+    external: true
 
 volumes:
   waypoints:
